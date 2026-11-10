@@ -16,30 +16,46 @@ fs.mkdirSync(agentDir,{recursive:true});
 const requests=[];
 let askedQuestions=false;
 const objective=`Create greeting.txt containing exactly Hello from goal followed by a newline. Verify it${production?'': ' and finish with the completion auditor'}.`;
+// The advertised tool profile is fixed: execution and drafting tools are always
+// declared so the provider prefix stays cacheable. Infer the drafting phase
+// from the conversation instead of the tool list.
+const DRAFTING_PROMPT=/\[GOAL CONFIRMATION focus=(?:goal|sisyphus)\]|\[GOAL TWEAK DRAFT\]/;
+const messageText=message=>typeof message?.content==='string'?message.content:Array.isArray(message?.content)?message.content.map(part=>typeof part==='string'?part:part?.text??'').join('\n'):'';
+const draftingState=messages=>{
+ for(let index=messages.length-1;index>=0;index-=1){
+  const message=messages[index];
+  if(message?.role!=='user'||!DRAFTING_PROMPT.test(messageText(message)))continue;
+  const proposed=messages.slice(index+1).some(later=>later?.role==='assistant'&&(later.tool_calls??[]).some(call=>call.function?.name==='propose_goal_draft'));
+  return {active:true,proposed};
+ }
+ return {active:false,proposed:false};
+};
 const server=http.createServer(async(req,res)=>{
  let body='';for await(const chunk of req)body+=chunk;
  const payload=JSON.parse(body);
- const names=(payload.tools??[]).map(t=>t.function?.name);
  const auditor=/read-only completion auditor/i.test(JSON.stringify(payload.messages?.[0]));
+ const draft=draftingState(payload.messages??[]);
+ const refining=/Goal draft refinement requested|Draft cancelled/.test(JSON.stringify(payload.messages?.at(-1)));
+ const phase=auditor?'audit':draft.active&&(!draft.proposed||refining)?'draft':'execution';
  let optedIn=false;
  try{optedIn=JSON.parse(fs.readFileSync(globalFile,'utf8')).idleContinuationBackoff===true;}catch{ /* Missing global layer uses the default. */ }
  try{const local=JSON.parse(fs.readFileSync(path.join(cwd,'.pi/pi-goal-x-settings.json'),'utf8'));if(local.idleContinuationBackoff!==undefined)optedIn=local.idleContinuationBackoff===true;}catch{ /* Missing project layer inherits global. */ }
  let action;
  if(auditor){const ok=fs.existsSync(path.join(cwd,'greeting.txt'))&&fs.readFileSync(path.join(cwd,'greeting.txt'),'utf8')==='Hello from goal\n';action={text:ok?'The requested file is correct.\n<approved/>':'The file is missing or incorrect.\n<disapproved/>'};}
- else if(names.includes('propose_goal_draft')&&scenario==='dialog-text'&&!askedQuestions){
+ else if(draft.active&&!draft.proposed&&scenario==='dialog-text'&&!askedQuestions){
   askedQuestions=true;
   action={tool:'goal_questionnaire',args:{questions:[{id:'first',question:'First answer?',options:[]},{id:'second',question:'Second answer?',options:[]}]}};
  }
- else if(names.includes('propose_goal_draft'))action=/Goal draft refinement requested|Draft cancelled/.test(JSON.stringify(payload.messages.at(-1)))
-  ? {text:"Tell me what you would like to change."}
-  : {tool:'propose_goal_draft',args:{objective,sisyphus:false}};
+ else if(draft.active&&!draft.proposed)action={tool:'propose_goal_draft',args:{objective,sisyphus:false}};
+ else if(draft.active&&refining)action={text:"Tell me what you would like to change."};
  else if(scenario==='idle-opt-out'&&optedIn)action={text:'Standing by.'};
  else if(!fs.existsSync(path.join(cwd,'greeting.txt')))action={tool:'write',args:{path:'greeting.txt',content:'Hello from goal\n'}};
  else action={tool:'update_goal',args:{status:'complete'}};
  const first=payload.messages?.[0];
  const system=['system','developer'].includes(first?.role)?JSON.stringify(first.content):'';
- requests.push({at:Date.now(),phase:auditor?'audit':names.includes('propose_goal_draft')?'draft':'execution',action:action.tool??'text',optedIn,
-  systemPresent:!!system,executionPromptCorrect:system.includes('create_goal')&&!system.includes('propose_goal_draft'),systemSHA256:createHash('sha256').update(system).digest('hex')});
+ const fixedProfile=system.includes('create_goal')&&system.includes('propose_goal_draft');
+ requests.push({at:Date.now(),phase,action:action.tool??'text',optedIn,
+  systemPresent:!!system,fixedProfilePresent:fixedProfile,systemSHA256:createHash('sha256').update(system).digest('hex')});
  fs.writeFileSync(path.join(cwd,'requests.json'),JSON.stringify(requests,null,2)+'\n');
  // Give the operator time to use ordinary pause controls while work is visible.
  if(action.tool==='write')await new Promise(resolve=>setTimeout(resolve,scenario==='foreign-focus'?15000:6000));

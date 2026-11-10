@@ -35,6 +35,18 @@ if(!diagnosePrefix){
 }
 
 const text=value=>({text:value});const tool=(name,args)=>({tool:name,args});
+// The goal tool profile is fixed across lifecycle phases, so the drafting phase
+// is inferred from the conversation: a drafting prompt with no later proposal.
+const DRAFTING_PROMPT=/\[GOAL CONFIRMATION focus=(?:goal|sisyphus)\]|\[GOAL TWEAK DRAFT\]/;
+const messageText=message=>typeof message?.content==='string'?message.content:Array.isArray(message?.content)?message.content.map(part=>typeof part==='string'?part:part?.text??'').join('\n'):'';
+const draftingRequest=messages=>{
+ for(let index=messages.length-1;index>=0;index-=1){
+  const message=messages[index];
+  if(message?.role!=='user'||!DRAFTING_PROMPT.test(messageText(message)))continue;
+  return !messages.slice(index+1).some(later=>later?.role==='assistant'&&(later.tool_calls??[]).some(call=>call.function?.name==='propose_goal_draft'));
+ }
+ return false;
+};
 const results=[];
 async function run(policy,scenario,{optIn=false,guard,cap}={}){
  const id=[policy,scenario,optIn?'enabled':'default',guard??'',cap?`cap-${cap}`:''].filter(Boolean).join('-');
@@ -51,7 +63,7 @@ async function run(policy,scenario,{optIn=false,guard,cap}={}){
  const server=http.createServer(async(req,res)=>{
   let body='';for await(const chunk of req)body+=chunk;
   const payload=JSON.parse(body);const audit=/read-only completion auditor/i.test(JSON.stringify(payload.messages?.[0]));
-  const draft=(payload.tools??[]).some(t=>t.function?.name==='propose_goal_draft');
+  const draft=draftingRequest(payload.messages??[]);
   const action=audit?text('The result.txt fixture contains exactly the expected result.\n<approved/>'):draft?tool('propose_goal_draft',{objective:'Produce result.txt containing exactly verified result followed by a newline. Verify it and complete the goal.',sisyphus:false}):(plan[step++]??text('Standing by.'));
   const at=performance.now();if(!audit&&!draft&&lastSettled!==undefined){dispatchMs.push(at-lastSettled);lastSettled=undefined;}
   // Pi can append a system-role prompt delta inside history. Its role does

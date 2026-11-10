@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {buildReport} from './cache-report.mjs';
 import {compareReports} from './cache-compare.mjs';
+import {BASE_SYSTEM} from './capture-context.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const ref='fe0e38f8cd03bfacc9baca730e9a902d3cff116e';
@@ -27,7 +28,9 @@ try {
  writeFileSync(baselineFile,JSON.stringify(baseline,null,2)+'\n');
  const candidate=await buildReport();
  writeFileSync(path.join(output,'candidate.json'),JSON.stringify(candidate,null,2)+'\n');
- const comparison=compareReports(baseline,candidate);
+ const comparison=compareReports(baseline,candidate,{hostSystem:BASE_SYSTEM});
  writeFileSync(path.join(output,'comparison.json'),JSON.stringify(comparison,null,2)+'\n');
- console.log(`Cache gate PASS: ${comparison.scenarios} adapter scenarios; ${comparison.approvedDifferences.length} exact approved display deltas; 1,000 bounded transitions. Evidence: ${output}`);
+ const display=comparison.approvedDifferences.filter(item=>item.reason==='default-context-display-off').length;
+ const profile=comparison.approvedDifferences.filter(item=>item.reason==='fixed-goal-tool-profile').length;
+ console.log(`Cache gate PASS: ${comparison.scenarios} adapter scenarios; ${display} exact approved display deltas; ${profile} approved fixed-profile system blocks; 1,000 bounded transitions. Evidence: ${output}`);
 } finally {rmSync(baselineRoot,{recursive:true,force:true});}

@@ -66,3 +66,32 @@ test("cache gate rejects serialized early-content changes and removed or relocat
   assert.throws(() => compareReports(baseline, wrap(candidate)));
  }
 });
+
+test("fixed goal profile is approved only inside tools and rules sections", () => {
+ const hostSystem = "base\n\n<tools>\n- read: Read files\n</tools>\n\n<rules>\n- Host rule\n</rules>\n";
+ const shape = (extra: string[]) => {
+  const profile = extra.length ? `\n${extra.map((name) => `- ${name}: extra`).join("\n")}` : "";
+  const rules = extra.length ? `\n${extra.map((name) => `- extra rule for ${name}`).join("\n")}` : "";
+  const system = `base\n\n<tools>\n- read: Read files${profile}\n</tools>\n\n<rules>\n- Host rule${rules}\n</rules>\n`;
+  return {version: 1, rows: [{id: "fixed", ...summarize({system, messages: [{role: "system", content: system}, {role: "user", content: "history"}], tools: [{name: "read", parameters: {type: "object"}}]}, [], {hostSystem})}]};
+ };
+ const baseline = shape(["goal_question"]);
+ const candidate = shape(["goal_question", "propose_goal_draft"]);
+ const approved = compareReports(baseline, candidate, {hostSystem});
+ assert.equal(approved.approvedDifferences.filter((item: {reason?: string}) => item.reason === "fixed-goal-tool-profile").length, 1);
+ const changed = structuredClone(baseline);
+ changed.rows[0].blocks[0].raw.content = "changed outside the profile sections";
+ changed.rows[0].blocks[0].hash = "different";
+ assert.throws(() => compareReports(baseline, changed, {hostSystem}));
+});
+
+test("task-enabled scenarios must share one immutable prefix", () => {
+ const row = (id: string, system: string) => ({id, ...summarize({system, messages: [{role: "user", content: "history"}], tools: [{name: "read", parameters: {type: "object"}}]})});
+ const active = row("openai/none/active", "policy");
+ const drafting = row("openai/none/guided-proposal", "policy");
+ const baseline = {version: 1, rows: [active, drafting]};
+ assert.equal(compareReports(baseline, structuredClone(baseline)).scenarios, 2);
+ const drifted = structuredClone(baseline);
+ drifted.rows[1].immutable = "state-dependent prefix";
+ assert.throws(() => compareReports(baseline, drifted), /immutable prefix varies across lifecycle states/);
+});

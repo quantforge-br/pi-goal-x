@@ -21,7 +21,11 @@ post-hook message list, and ACTIVE tool schemas — not isolated prompt strings.
 ## Notes
 
 - estimatedTokens = chars/4 heuristic (documented estimate, not live usage).
-- Schema size follows the active lifecycle profile. Extension-attributable size includes SDK guidance, injected state, goal-tool/custom results, and child requests. Conversation serialization preserves tool arguments and result metadata.
+- Schema size follows the fixed goal tool profile (execution + drafting tools
+  for tasks-enabled sessions, core + drafting tools with tasks disabled); goal
+  status, focus and draft state do not change it. Extension-attributable size
+  includes SDK guidance, injected state, goal-tool/custom results, and child
+  requests. Conversation serialization preserves tool arguments and result metadata.
 - Post-issue-#30 invariant enforced by the gate: historical checkpoint payload
   visible to the provider must be 0 chars on every fixture.
 
@@ -29,4 +33,4 @@ post-hook message list, and ACTIVE tool schemas — not isolated prompt strings.
 
 The 2026-09-07 capture uses actual active profiles and the SDK system-prompt builder (including tool snippets/guidelines), includes host schemas, exercises drafting/compaction, and measures child audit/Oracle request surfaces separately. Explicit get_goal results are included in the read-tool fixture. Character-based estimates remain estimates. `node experiments/context/provider-crosscheck.mjs` compares six executor/auditor/Oracle captures against real SDK provider payloads, intercepting before network dispatch.
 
-Use `CONTEXT_OUTPUT=<file> npm run context:measure` for isolated campaign outputs. The committed main baseline is updated only after semantic gates pass. The baseline rationale is recorded in specs/2026-09-07-runtime-token-optimization/MILESTONES.md.
+Use `CONTEXT_OUTPUT=<file> npm run context:measure` for isolated campaign outputs. The committed main baseline is updated only after semantic gates pass. The current baseline rationale is recorded in specs/2026-11-10-fixed-goal-tool-profile/MILESTONES.md; earlier captures are recorded in specs/2026-09-07-runtime-token-optimization/MILESTONES.md.

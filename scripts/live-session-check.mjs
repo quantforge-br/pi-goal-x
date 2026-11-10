@@ -36,8 +36,29 @@ console.log(`[live] host pi: ${HOST_VERSION}`);
 // ── Fake provider ───────────────────────────────────────────────────────────
 // Decides each scripted reply from the request itself, so the same logic serves
 // the drafting phase, the execution phase, and the isolated auditor session.
+// The advertised tool list is fixed (execution + drafting tools always declared
+// for prompt-cache stability), so the phase must be inferred from the
+// conversation: a drafting prompt with no later propose_goal_draft call.
+const DRAFTING_PROMPT = /\[GOAL CONFIRMATION focus=(?:goal|sisyphus)\]|\[GOAL TWEAK DRAFT\]/;
 const seen = { drafting: 0, execution: 0, audit: 0 };
 const providerRequests = [];
+
+function messageText(message) {
+	const content = message?.content;
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) return content.map((part) => (typeof part === "string" ? part : part?.text ?? "")).join("\n");
+	return "";
+}
+
+function isDraftingRequest(messages) {
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index];
+		if (message?.role !== "user" || !DRAFTING_PROMPT.test(messageText(message))) continue;
+		return !messages.slice(index + 1).some((later) =>
+			later?.role === "assistant" && (later.tool_calls ?? []).some((call) => call.function?.name === "propose_goal_draft"));
+	}
+	return false;
+}
 
 const server = createServer((req, res) => {
 	let body = "";
@@ -48,12 +69,13 @@ const server = createServer((req, res) => {
 		const toolNames = (parsed.tools ?? []).map((t) => t.function?.name).filter(Boolean);
 		const systemText = JSON.stringify(parsed.messages?.[0] ?? {});
 		const isAuditor = /read-only completion auditor/i.test(systemText);
+		const drafting = !isAuditor && isDraftingRequest(parsed.messages ?? []);
 
 		let step;
 		if (isAuditor) {
 			seen.audit += 1;
 			step = { text: "The objective's success criterion is satisfied: one live goal lifecycle completed against this host.\n\n<approved/>" };
-		} else if (toolNames.includes("propose_goal_draft")) {
+		} else if (drafting) {
 			seen.drafting += 1;
 			step = {
 				tool: "propose_goal_draft",
@@ -62,18 +84,16 @@ const server = createServer((req, res) => {
 					sisyphus: false,
 				},
 			};
-		} else if (toolNames.includes("update_goal")) {
+		} else {
 			seen.execution += 1;
 			step = {
 				tool: "update_goal",
 				args: { status: "complete", completion_summary: "Completed one live goal lifecycle against the installed pi host." },
 			};
-		} else {
-			step = { text: "Nothing further to do." };
 		}
 
-		providerRequests.push({ isAuditor, toolNames });
-		console.log(`[live][provider] turn=${providerRequests.length} phase=${isAuditor ? "audit" : toolNames.includes("propose_goal_draft") ? "drafting" : toolNames.includes("update_goal") ? "execution" : "idle"} tools=[${toolNames.join(",")}]`);
+		providerRequests.push({ isAuditor, drafting, toolNames });
+		console.log(`[live][provider] turn=${providerRequests.length} phase=${isAuditor ? "audit" : drafting ? "drafting" : "execution"} tools=[${toolNames.join(",")}]`);
 
 		res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
 		const send = (delta, finish = null) => res.write(`data: ${JSON.stringify({

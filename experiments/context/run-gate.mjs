@@ -17,6 +17,7 @@ import * as path from "node:path";
 import { captureOne } from "./capture-context.mjs";
 import { FIXTURES } from "./fixtures.mjs";
 import { measureContext, semanticCounts, serializeRequest } from "./measure-context.mjs";
+import { CORE_GOAL_TOOLS, DRAFTING_GOAL_TOOLS, FIVE_GOAL_TOOLS } from "../../extensions/goal-tool-names.ts";
 
 function serializedRequestText(captured) {
 	return serializeRequest(captured).total;
@@ -28,6 +29,8 @@ function escapeRegExp(text) {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const failures = [];
+// First observed ordered profile per settings class, compared across fixtures.
+const profiles = new Map();
 
 const baseline = JSON.parse(readFileSync(path.join(here, "baseline-main.json"), "utf8"));
 const baselineById = new Map(baseline.fixtures.map((r) => [r.fixture, r]));
@@ -67,7 +70,22 @@ for (const fixtureId of expectedFixtureIds) {
 	}
 
  const names = captured.tools.map(t => t.name);
- if (scenario.draftPrompt && JSON.stringify([...names].sort()) !== JSON.stringify(["goal_question", "goal_questionnaire", "propose_goal_draft"].sort())) failures.push(`${fixtureId}: incorrect drafting profile`);
+ // The advertised goal profile is fixed: drafting and execution requests must
+ // carry the same ordered declarations, with the drafting tools always present.
+ const expectedProfile = new Set([...(scenario.settings?.disableTasks ? CORE_GOAL_TOOLS : FIVE_GOAL_TOOLS), ...DRAFTING_GOAL_TOOLS]);
+ if (names.length !== expectedProfile.size || new Set(names).size !== names.length || names.some(name => !expectedProfile.has(name))) {
+  failures.push(`${fixtureId}: unexpected goal tool profile [${names.join(", ")}]`);
+ }
+ const profileKey = scenario.settings?.disableTasks ? "tasks-disabled" : "tasks-enabled";
+ const knownProfile = profiles.get(profileKey);
+ if (knownProfile && JSON.stringify(knownProfile.names) !== JSON.stringify(names)) {
+  failures.push(`${fixtureId}: tool declarations differ from ${knownProfile.fixture} (${profileKey} profile must not depend on lifecycle state)`);
+ } else if (!knownProfile) {
+  profiles.set(profileKey, { fixture: fixtureId, names });
+ }
+ if (scenario.draftPrompt && !DRAFTING_GOAL_TOOLS.every(name => names.includes(name))) {
+  failures.push(`${fixtureId}: drafting request is missing drafting tools`);
+ }
  if (fixtureId === "tasks-disabled" && names.some(n => n === "set_goal_tasks" || n === "update_goal_task")) failures.push(`${fixtureId}: disabled tools advertised`);
  if (["completion-audit", "audit-rejection-and-rework", "oracle-consultation"].includes(fixtureId) && !(breakdown.childRequestChars > 0)) failures.push(`${fixtureId}: child request not captured`);
  if (fixtureId === "post-compaction-turn" && !serializedRequestText(captured).includes("POST-COMPACTION RESYNC")) failures.push(`${fixtureId}: compaction hook was not exercised`);

@@ -8,7 +8,7 @@ import {execFileSync} from 'node:child_process';
 import {ModelRuntime, convertToLlm} from '@earendil-works/pi-coding-agent';
 import {cacheGoalHistory} from '../../extensions/goal-prompt-cache.ts';
 import {LiveTailRetention} from '../../extensions/goal-live-retention.ts';
-import {captureOne} from './capture-context.mjs';
+import {BASE_SYSTEM, captureOne} from './capture-context.mjs';
 import {FIXTURES, userMessage, assistantMessage} from './fixtures.mjs';
 import {digest, summarize, compareReports, investigateCache} from './cache-compare.mjs';
 
@@ -38,7 +38,7 @@ export async function buildReport() {
      assert.ok(payload,`${id}: missing provider payload`);
      // Tool descriptions may contain the known physical SDK/fixture root only.
      const normalized=JSON.parse(JSON.stringify(payload).replaceAll(realpathSync(path.join(root,'node_modules/@earendil-works/pi-coding-agent')),'/sdk'));
-     const row={id:`${flavor}/${tier}/${id}`,...summarize(normalized,transients)};
+     const row={id:`${flavor}/${tier}/${id}`,...summarize(normalized,transients,{hostSystem:BASE_SYSTEM})};
      rows.push(row);
      if(samples.length<2) samples.push({id:row.id,payload:normalized});
      return row;
@@ -92,6 +92,6 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
  const baselinePath=process.argv.find(a=>a.startsWith('--baseline='))?.slice(11);
  const output=process.argv.find(a=>a.startsWith('--output='))?.slice(9);
  if(output) writeFileSync(output,JSON.stringify(candidate,null,2)+'\n');
- const result=baselinePath?compareReports(JSON.parse(readFileSync(baselinePath,'utf8')),candidate):{scenarios:candidate.rows.length,corpus:candidate.corpus};
+ const result=baselinePath?compareReports(JSON.parse(readFileSync(baselinePath,'utf8')),candidate,{hostSystem:BASE_SYSTEM}):{scenarios:candidate.rows.length,corpus:candidate.corpus};
  console.log(JSON.stringify(result,null,2));
 }

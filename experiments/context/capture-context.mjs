@@ -80,6 +80,13 @@ function createCapture(cwd) {
 
 	piGoalExtension(mockPi);
 
+	// The real SDK activates extension tools at registration, before
+	// session_start. Mirror that so the capture's ordered declarations and
+	// system prompt match the live session (the fixed profile then makes the
+	// session_start reinstall a no-op). Without this, the mock starts from host
+	// tools only and session_start reorders the goal tools.
+	activeTools = [...hostTools.map((t) => t.name), ...tools.map((t) => t.name)];
+
 	async function startSession(entries) {
 		ctx.sessionManager.getBranch = () => entries;
 		await handlers.get("session_start")({ reason: "start" }, ctx);

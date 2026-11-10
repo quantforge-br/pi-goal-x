@@ -1,24 +1,24 @@
 {
-  "generatedAtCommit": "0.34.1-context-display-off",
-  "measuredAt": "2026-10-27",
+  "generatedAtCommit": "4499e77-fixed-goal-tool-profile",
+  "measuredAt": "2026-11-10",
   "fixtures": [
     {
       "fixture": "active-regular-10-tasks",
       "breakdown": {
-        "sdkGuidanceChars": 1141,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2983,
-        "extensionAttributableChars": 8778,
-        "baseSystemChars": 3671,
+        "extensionAttributableChars": 12095,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 2092,
         "checkpointChars": 210,
         "historicalCheckpointChars": 140,
-        "toolSchemaChars": 4654,
+        "toolSchemaChars": 7200,
         "messageChars": 3384,
-        "totalSerializedChars": 14267,
-        "estimatedTokens": 3567
+        "totalSerializedChars": 17584,
+        "estimatedTokens": 4396
       },
       "semantic": {
         "objective": 1,
@@ -41,20 +41,20 @@
     {
       "fixture": "active-regular-50-tasks",
       "breakdown": {
-        "sdkGuidanceChars": 1141,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2838,
-        "extensionAttributableChars": 8633,
-        "baseSystemChars": 3671,
+        "extensionAttributableChars": 11950,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 1947,
         "checkpointChars": 210,
         "historicalCheckpointChars": 140,
-        "toolSchemaChars": 4654,
+        "toolSchemaChars": 7200,
         "messageChars": 3239,
-        "totalSerializedChars": 14122,
-        "estimatedTokens": 3531
+        "totalSerializedChars": 17439,
+        "estimatedTokens": 4360
       },
       "semantic": {
         "objective": 1,
@@ -77,20 +77,20 @@
     {
       "fixture": "active-regular-no-tasks",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2479,
-        "extensionAttributableChars": 6822,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 11591,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 1597,
         "checkpointChars": 210,
         "historicalCheckpointChars": 140,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 2880,
-        "totalSerializedChars": 12311,
-        "estimatedTokens": 3078
+        "totalSerializedChars": 17080,
+        "estimatedTokens": 4270
       },
       "semantic": {
         "objective": 1,
@@ -113,20 +113,20 @@
     {
       "fixture": "audit-rejection-and-rework",
       "breakdown": {
-        "sdkGuidanceChars": 293,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 5348,
         "extensionMessageChars": 681,
-        "extensionAttributableChars": 7466,
-        "baseSystemChars": 2823,
+        "extensionAttributableChars": 15141,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 0,
         "checkpointChars": 222,
         "historicalCheckpointChars": 148,
-        "toolSchemaChars": 1144,
+        "toolSchemaChars": 7200,
         "messageChars": 1080,
-        "totalSerializedChars": 7605,
-        "estimatedTokens": 1902
+        "totalSerializedChars": 15280,
+        "estimatedTokens": 3820
       },
       "semantic": {
         "objective": 0,
@@ -149,20 +149,20 @@
     {
       "fixture": "blocked-goal",
       "breakdown": {
-        "sdkGuidanceChars": 293,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 1075,
-        "extensionAttributableChars": 2512,
-        "baseSystemChars": 2823,
+        "extensionAttributableChars": 10187,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 322,
         "checkpointChars": 207,
         "historicalCheckpointChars": 138,
-        "toolSchemaChars": 1144,
+        "toolSchemaChars": 7200,
         "messageChars": 1475,
-        "totalSerializedChars": 8000,
-        "estimatedTokens": 2000
+        "totalSerializedChars": 15675,
+        "estimatedTokens": 3919
       },
       "semantic": {
         "objective": 1,
@@ -185,20 +185,20 @@
     {
       "fixture": "completion-audit",
       "breakdown": {
-        "sdkGuidanceChars": 293,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 5352,
         "extensionMessageChars": 705,
-        "extensionAttributableChars": 7494,
-        "baseSystemChars": 2823,
+        "extensionAttributableChars": 15169,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 0,
         "checkpointChars": 234,
         "historicalCheckpointChars": 156,
-        "toolSchemaChars": 1144,
+        "toolSchemaChars": 7200,
         "messageChars": 1104,
-        "totalSerializedChars": 7629,
-        "estimatedTokens": 1908
+        "totalSerializedChars": 15304,
+        "estimatedTokens": 3826
       },
       "semantic": {
         "objective": 0,
@@ -221,20 +221,20 @@
     {
       "fixture": "current-contracted-task",
       "breakdown": {
-        "sdkGuidanceChars": 1141,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 3249,
-        "extensionAttributableChars": 9044,
-        "baseSystemChars": 3671,
+        "extensionAttributableChars": 12361,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 2314,
         "checkpointChars": 231,
         "historicalCheckpointChars": 154,
-        "toolSchemaChars": 4654,
+        "toolSchemaChars": 7200,
         "messageChars": 3650,
-        "totalSerializedChars": 14533,
-        "estimatedTokens": 3634
+        "totalSerializedChars": 17850,
+        "estimatedTokens": 4463
       },
       "semantic": {
         "objective": 1,
@@ -257,20 +257,20 @@
     {
       "fixture": "get-goal-default-and-verbose",
       "breakdown": {
-        "sdkGuidanceChars": 1141,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 4578,
-        "extensionAttributableChars": 10373,
-        "baseSystemChars": 3671,
+        "extensionAttributableChars": 13690,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 2097,
         "checkpointChars": 210,
         "historicalCheckpointChars": 140,
-        "toolSchemaChars": 4654,
+        "toolSchemaChars": 7200,
         "messageChars": 4981,
-        "totalSerializedChars": 15864,
-        "estimatedTokens": 3966
+        "totalSerializedChars": 19181,
+        "estimatedTokens": 4796
       },
       "semantic": {
         "objective": 3,
@@ -293,20 +293,20 @@
     {
       "fixture": "guided-drafting-question",
       "breakdown": {
-        "sdkGuidanceChars": 771,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 0,
-        "extensionAttributableChars": 3316,
-        "baseSystemChars": 3301,
+        "extensionAttributableChars": 9112,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 0,
         "checkpointChars": 0,
         "historicalCheckpointChars": 0,
-        "toolSchemaChars": 2545,
+        "toolSchemaChars": 7200,
         "messageChars": 204,
-        "totalSerializedChars": 8608,
-        "estimatedTokens": 2152
+        "totalSerializedChars": 14404,
+        "estimatedTokens": 3601
       },
       "semantic": {
         "objective": 0,
@@ -329,20 +329,20 @@
     {
       "fixture": "guided-proposal",
       "breakdown": {
-        "sdkGuidanceChars": 771,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 0,
-        "extensionAttributableChars": 3316,
-        "baseSystemChars": 3301,
+        "extensionAttributableChars": 9112,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 0,
         "checkpointChars": 0,
         "historicalCheckpointChars": 0,
-        "toolSchemaChars": 2545,
+        "toolSchemaChars": 7200,
         "messageChars": 206,
-        "totalSerializedChars": 8610,
-        "estimatedTokens": 2153
+        "totalSerializedChars": 14406,
+        "estimatedTokens": 3602
       },
       "semantic": {
         "objective": 0,
@@ -365,20 +365,20 @@
     {
       "fixture": "half-complete-tree",
       "breakdown": {
-        "sdkGuidanceChars": 1141,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 3020,
-        "extensionAttributableChars": 8815,
-        "baseSystemChars": 3671,
+        "extensionAttributableChars": 12132,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 2099,
         "checkpointChars": 225,
         "historicalCheckpointChars": 150,
-        "toolSchemaChars": 4654,
+        "toolSchemaChars": 7200,
         "messageChars": 3421,
-        "totalSerializedChars": 14304,
-        "estimatedTokens": 3576
+        "totalSerializedChars": 17621,
+        "estimatedTokens": 4406
       },
       "semantic": {
         "objective": 1,
@@ -401,20 +401,20 @@
     {
       "fixture": "latest-auditor-rejection",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 1694,
-        "extensionAttributableChars": 6037,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 10806,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 875,
         "checkpointChars": 237,
         "historicalCheckpointChars": 158,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 2094,
-        "totalSerializedChars": 11525,
-        "estimatedTokens": 2882
+        "totalSerializedChars": 16294,
+        "estimatedTokens": 4074
       },
       "semantic": {
         "objective": 1,
@@ -437,20 +437,20 @@
     {
       "fixture": "long-objective",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 4080,
-        "extensionAttributableChars": 8423,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 13192,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 3159,
         "checkpointChars": 228,
         "historicalCheckpointChars": 152,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 4481,
-        "totalSerializedChars": 13912,
-        "estimatedTokens": 3478
+        "totalSerializedChars": 18681,
+        "estimatedTokens": 4671
       },
       "semantic": {
         "objective": 0,
@@ -473,20 +473,20 @@
     {
       "fixture": "nested-tasks",
       "breakdown": {
-        "sdkGuidanceChars": 1141,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2937,
-        "extensionAttributableChars": 8732,
-        "baseSystemChars": 3671,
+        "extensionAttributableChars": 12049,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 2022,
         "checkpointChars": 222,
         "historicalCheckpointChars": 148,
-        "toolSchemaChars": 4654,
+        "toolSchemaChars": 7200,
         "messageChars": 3338,
-        "totalSerializedChars": 14221,
-        "estimatedTokens": 3556
+        "totalSerializedChars": 17538,
+        "estimatedTokens": 4385
       },
       "semantic": {
         "objective": 1,
@@ -509,20 +509,20 @@
     {
       "fixture": "oracle-consultation",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 4528,
         "extensionMessageChars": 2465,
-        "extensionAttributableChars": 11336,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 16105,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 1595,
         "checkpointChars": 204,
         "historicalCheckpointChars": 136,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 2866,
-        "totalSerializedChars": 12297,
-        "estimatedTokens": 3075
+        "totalSerializedChars": 17066,
+        "estimatedTokens": 4267
       },
       "semantic": {
         "objective": 1,
@@ -545,20 +545,20 @@
     {
       "fixture": "paused-goal",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 1317,
-        "extensionAttributableChars": 5660,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 10429,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 568,
         "checkpointChars": 204,
         "historicalCheckpointChars": 136,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 1717,
-        "totalSerializedChars": 11148,
-        "estimatedTokens": 2787
+        "totalSerializedChars": 15917,
+        "estimatedTokens": 3980
       },
       "semantic": {
         "objective": 1,
@@ -581,20 +581,20 @@
     {
       "fixture": "post-compaction-turn",
       "breakdown": {
-        "sdkGuidanceChars": 1141,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2294,
-        "extensionAttributableChars": 8089,
-        "baseSystemChars": 3671,
+        "extensionAttributableChars": 11406,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 2060,
         "checkpointChars": 0,
         "historicalCheckpointChars": 0,
-        "toolSchemaChars": 4654,
+        "toolSchemaChars": 7200,
         "messageChars": 2564,
-        "totalSerializedChars": 13447,
-        "estimatedTokens": 3362
+        "totalSerializedChars": 16764,
+        "estimatedTokens": 4191
       },
       "semantic": {
         "objective": 1,
@@ -617,20 +617,20 @@
     {
       "fixture": "sisyphus-ordered-objective",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 3015,
-        "extensionAttributableChars": 7358,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 12127,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 2124,
         "checkpointChars": 210,
         "historicalCheckpointChars": 140,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 3416,
-        "totalSerializedChars": 12847,
-        "estimatedTokens": 3212
+        "totalSerializedChars": 17616,
+        "estimatedTokens": 4404
       },
       "semantic": {
         "objective": 0,
@@ -653,20 +653,20 @@
     {
       "fixture": "stale-checkpoint",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 699,
-        "extensionAttributableChars": 5042,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 9811,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 384,
         "checkpointChars": 68,
         "historicalCheckpointChars": 0,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 702,
-        "totalSerializedChars": 10133,
-        "estimatedTokens": 2534
+        "totalSerializedChars": 14902,
+        "estimatedTokens": 3726
       },
       "semantic": {
         "objective": 1,
@@ -689,20 +689,20 @@
     {
       "fixture": "tasks-disabled",
       "breakdown": {
-        "sdkGuidanceChars": 374,
+        "sdkGuidanceChars": 1145,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2475,
-        "extensionAttributableChars": 5517,
-        "baseSystemChars": 2904,
+        "extensionAttributableChars": 8834,
+        "baseSystemChars": 3675,
         "extensionSystemChars": 0,
         "goalStateChars": 1593,
         "checkpointChars": 210,
         "historicalCheckpointChars": 140,
-        "toolSchemaChars": 2668,
+        "toolSchemaChars": 5214,
         "messageChars": 2876,
-        "totalSerializedChars": 11006,
-        "estimatedTokens": 2752
+        "totalSerializedChars": 14323,
+        "estimatedTokens": 3581
       },
       "semantic": {
         "objective": 1,
@@ -725,20 +725,20 @@
     {
       "fixture": "token-budget-at-limit",
       "breakdown": {
-        "sdkGuidanceChars": 374,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 1065,
-        "extensionAttributableChars": 4107,
-        "baseSystemChars": 2904,
+        "extensionAttributableChars": 10177,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 283,
         "checkpointChars": 222,
         "historicalCheckpointChars": 148,
-        "toolSchemaChars": 2668,
+        "toolSchemaChars": 7200,
         "messageChars": 1465,
-        "totalSerializedChars": 9595,
-        "estimatedTokens": 2399
+        "totalSerializedChars": 15665,
+        "estimatedTokens": 3917
       },
       "semantic": {
         "objective": 1,
@@ -761,20 +761,20 @@
     {
       "fixture": "token-budget-seventy-five-percent",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2520,
-        "extensionAttributableChars": 6863,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 11632,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 1614,
         "checkpointChars": 222,
         "historicalCheckpointChars": 148,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 2921,
-        "totalSerializedChars": 12352,
-        "estimatedTokens": 3088
+        "totalSerializedChars": 17121,
+        "estimatedTokens": 4281
       },
       "semantic": {
         "objective": 1,
@@ -797,20 +797,20 @@
     {
       "fixture": "token-budget-zero-percent",
       "breakdown": {
-        "sdkGuidanceChars": 690,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 2505,
-        "extensionAttributableChars": 6848,
-        "baseSystemChars": 3220,
+        "extensionAttributableChars": 11617,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 1605,
         "checkpointChars": 219,
         "historicalCheckpointChars": 146,
-        "toolSchemaChars": 3653,
+        "toolSchemaChars": 7200,
         "messageChars": 2906,
-        "totalSerializedChars": 12337,
-        "estimatedTokens": 3085
+        "totalSerializedChars": 17106,
+        "estimatedTokens": 4277
       },
       "semantic": {
         "objective": 1,
@@ -833,20 +833,20 @@
     {
       "fixture": "unfocused-multiple-goals",
       "breakdown": {
-        "sdkGuidanceChars": 293,
+        "sdkGuidanceChars": 1912,
         "hostToolSchemaChars": 2555,
         "childRequestChars": 0,
         "extensionMessageChars": 337,
-        "extensionAttributableChars": 1774,
-        "baseSystemChars": 2823,
+        "extensionAttributableChars": 9449,
+        "baseSystemChars": 4442,
         "extensionSystemChars": 0,
         "goalStateChars": 238,
         "checkpointChars": 0,
         "historicalCheckpointChars": 0,
-        "toolSchemaChars": 1144,
+        "toolSchemaChars": 7200,
         "messageChars": 398,
-        "totalSerializedChars": 6923,
-        "estimatedTokens": 1731
+        "totalSerializedChars": 14598,
+        "estimatedTokens": 3650
       },
       "semantic": {
         "objective": 0,
@@ -868,10 +868,10 @@
     }
   ],
   "totals": {
-    "totalSerializedChars": 277596,
-    "estimatedTokens": 69408,
+    "totalSerializedChars": 395415,
+    "estimatedTokens": 98863,
     "childRequestChars": 15228,
-    "combinedSerializedChars": 292824,
-    "extensionAttributableChars": 162355
+    "combinedSerializedChars": 410643,
+    "extensionAttributableChars": 280174
   }
 }
