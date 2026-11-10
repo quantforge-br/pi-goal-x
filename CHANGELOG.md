@@ -4,6 +4,14 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Keep the goal tool profile fixed so providers keep the cached prompt prefix: the five execution tools (three with `disableTasks`) plus the three drafting tools stay declared in every state. Goal status, focus, task presence, and draft start/confirm/cancel no longer change tool declarations. Drafting tools reject calls without an active draft, and the five execution tools are blocked while a draft is active ([#126](https://github.com/tmonk/pi-goal-x/issues/126), [#127](https://github.com/tmonk/pi-goal-x/pull/127) by [@wuhaoyujerry](https://github.com/wuhaoyujerry)).
+
+### Fixed
+
+- Block the five execution goal tools for the rest of a turn in which `propose_goal_draft` confirmed or cancelled the draft, so a later call in the same assistant message cannot create or change a goal the user did not confirm.
+
 ## [0.34.1] — 2026-10-27
 
 Includes #118.

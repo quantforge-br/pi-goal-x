@@ -42,6 +42,7 @@ export class GoalRuntime {
 	// ── turn-stop guard ──────────────────────────────────────────────────
 	private turnSeq = 0;
 	private turnStoppedFor: { goalId: string; turnSeq: number } | null = null;
+	private draftResolvedTurnSeq: number | null = null;
 
 	// ── stale checkpoint state ───────────────────────────────────────────
 	private checkpointGoalId: string | null = null;
@@ -214,6 +215,16 @@ export class GoalRuntime {
 			return null;
 		}
 		return this.turnStoppedFor.goalId;
+	}
+
+	/** Mark that a guided draft was confirmed or cancelled in the current turn. */
+	markDraftResolved(): void {
+		this.draftResolvedTurnSeq = this.turnSeq;
+	}
+
+	/** Whether a guided draft was confirmed or cancelled earlier in the current turn. */
+	isDraftResolvedThisTurn(): boolean {
+		return this.draftResolvedTurnSeq === this.turnSeq;
 	}
 
 	// ── stale checkpoint state ───────────────────────────────────────────

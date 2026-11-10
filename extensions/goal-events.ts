@@ -163,6 +163,14 @@ export function registerGoalEvents(core: GoalCore): void {
 				reason: commandInstructions("A goal draft is active. Finish it with propose_goal_draft or ask the user to run /goal-cancel.", core.loadedCommands),
 			};
 		}
+		// A proposal that confirmed or cancelled the draft must not let later calls
+		// in the same assistant message act on (or recreate) the unconfirmed goal.
+		if (core.runtime.isDraftResolvedThisTurn() && (FIVE_GOAL_TOOLS as readonly string[]).includes(event.toolName)) {
+			return {
+				block: true,
+				reason: "The goal draft was resolved earlier in this turn. End the turn with a brief summary and yield to the user.",
+			};
+		}
 		// Track Oracle work attempts; this does not authorize scheduling.
 		if (isMeaningfulProgressToolCall(event.toolName, event.input)) {
 			core.goalWorkToolCalledThisTurn = true;

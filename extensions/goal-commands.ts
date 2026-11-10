@@ -437,7 +437,7 @@ export function registerGoalCommands(core: GoalCore): void {
 		}
 
 		/**
-		 * After any mutation: reinstall the fixed three/five tool profile when
+		 * After any mutation: reinstall the fixed goal tool profile when
 		 * the effective disableTasks value changed since the last install, and
 		 * refresh the UI. This is the central settings side-effect hook — no
 		 * ad hoc per-row refresh code.
@@ -756,7 +756,7 @@ export function registerGoalCommands(core: GoalCore): void {
 			}
 			clearGoalDrafting(core, ctx);
 			core.clearContinuationState();
-			ctx.ui.notify("Draft cancelled; no goal was created. The execution profile is restored.", "info");
+			ctx.ui.notify("Draft cancelled; no goal was created.", "info");
 		},
 	});
 	define("goal-direct", {

@@ -367,6 +367,7 @@ export function registerDraftingTools(core: GoalCore): void {
 			});
 			if (confirmation.decision === "cancel") {
 				clearGoalDrafting(core, ctx);
+				core.runtime.markDraftResolved();
 				return { content: [{ type: "text", text: `${summary}\n\nDraft cancelled; no goal was created. Run ${commandHint("goal", core.loadedCommands)} or ${commandHint("sisyphus", core.loadedCommands)} to start a new draft.` }], details: goalDetails(core.state.goal) };
 			}
 			if (confirmation.unavailable) {
@@ -395,6 +396,7 @@ export function registerDraftingTools(core: GoalCore): void {
 				})();
 				core.replaceGoal({ objective: extracted.objective, autoContinue: params.auto_continue !== false, sisyphus: expectedSisyphus, taskList: effectiveTaskList, skipAuditor }, ctx, true, extracted.verificationContract, proposedBudget);
 				clearGoalDrafting(core, ctx);
+				core.runtime.markDraftResolved();
 				const created = core.state.goal;
 				return { content: [{ type: "text", text: `${summary}\n\n${buildGoalCreatedReport({
 					objective: extracted.objective,
@@ -487,6 +489,7 @@ export function registerDraftingTools(core: GoalCore): void {
 				core.queueContinuation(ctx, true);
 			}
 			clearGoalDrafting(core, ctx);
+			core.runtime.markDraftResolved();
 			return { content: [{ type: "text", text: `${summary}\n\nGoal tweak confirmed and applied.\n${formatGoalBudget(result.goal.tokenBudget)}${schedulingNote}${result.goal.status === "budget_limited" ? "\nConsumed tokens already meet this budget; the goal remains budget-limited." : result.goal.status === "paused" ? commandInstructions("\nGoal remains paused. Use /goal-resume to continue when scheduling permits.", core.loadedCommands) : ""}` }], details: goalDetails(result.goal), terminate: true };
 		},
 		renderCall(args, theme) {

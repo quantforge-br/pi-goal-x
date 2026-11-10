@@ -137,7 +137,8 @@ The tool surface is fixed across execution and guided drafting:
 
 The `tool_call` interceptor:
 
-- blocks all five execution goal tools during an active draft, preserving the
+- blocks all five execution goal tools during an active draft, and for the rest
+  of a turn whose proposal confirmed or cancelled the draft, preserving the
   confirmation boundary without changing tool declarations;
 - blocks work tools after a stop tool has fired in the same turn (post-stop
   guard);

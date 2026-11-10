@@ -1,6 +1,6 @@
 /** Fixed tool profiles preserve cached prefixes, host tools, and executor guards. */
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -191,6 +191,67 @@ describe("Applicable tool profiles", () => {
 			} finally {
 				f.cleanup();
 			}
+		}
+	});
+
+	// The fixed profile advertises task tools in every state, so their executors
+	// are the only lifecycle protection left.
+	it("task tools reject inapplicable states without changing the goal", async () => {
+		const rejects = {
+			set_goal_tasks: { statuses: ["blocked", "budget_limited", "complete"], params: { tasks: [{ id: "t2", title: "New task" }] }, message: /applies to an active or paused goal/ },
+			update_goal_task: { statuses: ["paused", "blocked", "budget_limited", "complete"], params: { task_id: "t1", status: "complete", evidence: "done" }, message: /applies only to an active goal/ },
+		} as const;
+		for (const [toolName, { statuses, params, message }] of Object.entries(rejects)) {
+			for (const status of statuses) {
+				const f = testFixture();
+				try {
+					const goal = createGoal({ objective: `Reject ${toolName} when ${status}`, autoContinue: false, sisyphus: false }, Date.UTC(2026, 5, 26, 12, 0, 0));
+					goal.status = status;
+					if (status === "paused" || status === "blocked") {
+						goal.stopReason = "agent";
+						goal.pauseReason = "Testing";
+					}
+					goal.taskList = { tasks: [{ id: "t1", title: "Existing task", status: "pending" }], blockCompletion: false, proposedAt: new Date().toISOString() };
+					const written = writeActiveGoalFile({ cwd: f.cwd } as any, goal);
+					const entries = [
+						{ type: "custom", customType: "pi-goal-focus", data: goalFocusDetails(goal.id, "created") },
+						{ type: "custom", customType: "pi-goal-state", data: { version: 3, goal: { ...goal, activePath: written.activePath } } },
+					];
+					activeToolNames = [...HOST_SEED_A];
+					apiCalls = [];
+					await runSession(f.cwd, entries);
+					const goalFile = path.resolve(f.cwd, written.activePath!); // writeActiveGoalFile always sets it
+					const before = readFileSync(goalFile, "utf8");
+					const tool = registeredTools.find((t) => t.name === toolName)!;
+					const result = await (tool.execute as Function)(`${toolName}-${status}`, params, new AbortController().signal, undefined, f.mockCtx);
+					// A complete goal is not restored as the focused goal.
+					assert.match(result.content?.[0]?.text ?? "", status === "complete" ? /No goal is (set|focused)/ : message, `${toolName} on a ${status} goal`);
+					assert.equal(readFileSync(goalFile, "utf8"), before, `${toolName} on a ${status} goal leaves the goal file unchanged`);
+					expectGoalProfile(ENABLED_PROFILE);
+				} finally {
+					f.cleanup();
+				}
+			}
+		}
+	});
+
+	it("task tools reject calls without a focused goal", async () => {
+		const cwd = mkdtempSync(path.join(tmpdir(), "goal-tool-vis-nofocus-tasks-"));
+		try {
+			mkdirSync(path.join(cwd, ".pi", "goals", "archived"), { recursive: true });
+			activeToolNames = [...HOST_SEED_A];
+			apiCalls = [];
+			await runSession(cwd, []);
+			const ctx = createMockCtx(cwd, []);
+			const setTasks = registeredTools.find((t) => t.name === "set_goal_tasks")!;
+			const updateTask = registeredTools.find((t) => t.name === "update_goal_task")!;
+			const planned = await (setTasks.execute as Function)("set-none", { tasks: [{ id: "t1", title: "Task" }] }, new AbortController().signal, undefined, ctx);
+			assert.match(planned.content[0].text, /No goal is set/);
+			const progressed = await (updateTask.execute as Function)("update-none", { task_id: "t1", status: "complete", evidence: "done" }, new AbortController().signal, undefined, ctx);
+			assert.match(progressed.content[0].text, /No goal is focused/);
+			expectGoalProfile(ENABLED_PROFILE);
+		} finally {
+			try { rmSync(cwd, { recursive: true, force: true }); } catch {}
 		}
 	});
 

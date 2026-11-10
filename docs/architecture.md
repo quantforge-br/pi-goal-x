@@ -168,8 +168,9 @@ prompt/criteria level:
 
 ## Creation and tweaking
 
-`/goal [seed]` and `/sisyphus [seed]` begin guided drafting. The temporary
-draft profile exposes only question/questionnaire/proposal tools. The agent
+`/goal [seed]` and `/sisyphus [seed]` begin guided drafting without changing
+the advertised tools; the five execution goal tools are blocked until the draft
+ends, and the question/questionnaire/proposal tools do the work. The agent
 clarifies intent, proposes the full objective and an optional task tree, and
 the user explicitly confirms or continues refining. `/goal-direct` and
 `/sisyphus-direct` bypass this only when the objective is already final.
@@ -208,13 +209,16 @@ The extension registers five normal-execution tools and three drafting-only tool
 | `goal_questionnaire` | Drafting-only multi-question clarification UI. |
 | `propose_goal_draft` | Drafting-only objective/task proposal with Confirm or Continue Chatting. |
 
-Outside drafting, creation and inspection are always advertised. Outcomes are
-advertised for active/paused/budget-limited goals; task planning for active or
-paused goals; task progress for active goals with tasks. Disabled tasks hide both
-task tools. A guided draft replaces goal tools with question/questionnaire/proposal
-tools until confirmation or cancellation. Ordinary pi work tools remain available.
-The SDK active profile changes only when membership changes. Executors still
-validate lifecycle state, including stale calls made after a transition.
+The goal tool profile is fixed: the five execution tools, or the three core tools
+when tasks are disabled, plus the three drafting tools. Goal status, focus, task
+presence, and draft start/confirm/cancel never change it, so tool declarations,
+which providers cache as part of the prompt prefix, stay stable. Only a
+`disableTasks` change alters it. Drafting tools reject calls without an active
+user-started draft. The `tool_call` guard blocks the five execution tools while a
+draft is active and for the rest of the turn in which a proposal confirmed or
+cancelled it. Executors still validate lifecycle state, including stale calls made
+after a transition. Ordinary pi work tools remain available, and the SDK active
+profile changes only when membership changes.
 
 Normal prompt/dashboard reads use per-goal ledger indexes: 12 recent events,
 64 activity candidates in stable timestamp order, pinned audit/lifecycle state,

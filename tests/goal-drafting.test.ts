@@ -238,6 +238,50 @@ test("dialog cancel is a durable no-op and clears the draft", async () => {
 	}
 });
 
+test("a proposal that cancels the draft blocks goal tools for the rest of the turn", async () => {
+	const cwd = mkdtempSync(path.join(tmpdir(), "goal-draft-cancel-turn-"));
+	mkdirSync(path.join(cwd, ".pi", "goals", "archived"), { recursive: true });
+	try {
+		const h = createHarness(cwd, { hasUI: true });
+		await h.sessionStart();
+		await h.commands.get("goal")!.handler("Ship a small feature", h.ctx);
+		await h.beforeAgentStart();
+		const pending = runProposal(h, proposalParams("Ship a small feature.\nSuccess criteria: tests pass."));
+		h.dialogResult({ questions: [], answers: [{ id: "confirm", question: "Confirm Goal Draft", answer: CANCEL_ANSWER, wasCustom: false }], cancelled: false });
+		assert.match((await pending).content[0].text, /Draft cancelled/);
+		// A create_goal later in the same assistant message must not recreate the declined goal.
+		const gate = await h.toolCall("create_goal");
+		assert.equal(gate?.block, true);
+		assert.match(gate.reason, /resolved earlier in this turn/);
+		assert.equal(activeGoalFiles(cwd).length, 0);
+		await h.beforeAgentStart();
+		assert.equal(await h.toolCall("create_goal"), undefined, "guard released on the next turn");
+	} finally {
+		try { rmSync(cwd, { recursive: true, force: true }); } catch {}
+	}
+});
+
+test("a proposal that confirms the draft blocks further goal tools for the rest of the turn", async () => {
+	const cwd = mkdtempSync(path.join(tmpdir(), "goal-draft-confirm-turn-"));
+	mkdirSync(path.join(cwd, ".pi", "goals", "archived"), { recursive: true });
+	try {
+		const h = createHarness(cwd);
+		await h.sessionStart();
+		await h.commands.get("goal")!.handler("Ship a small feature", h.ctx);
+		await h.beforeAgentStart();
+		await runProposal(h, proposalParams("Ship a small feature.\nSuccess criteria: tests pass."));
+		assert.equal(activeGoalFiles(cwd).length, 1, "confirmation creates the goal");
+		for (const name of ["create_goal", "update_goal", "set_goal_tasks"]) {
+			const gate = await h.toolCall(name);
+			assert.equal(gate?.block, true, name + " blocked after confirmation in the same turn");
+			assert.match(gate.reason, /resolved earlier in this turn/);
+		}
+		assert.equal(activeGoalFiles(cwd).length, 1, "no unconfirmed second goal");
+	} finally {
+		try { rmSync(cwd, { recursive: true, force: true }); } catch {}
+	}
+});
+
 test("regression: the proposal emits the complete goal presentation to the transcript before the dialog decision", async () => {
 	// Reported repro: the goal draft was not presenting tasks. The complete
 	// goal — every objective contract section and every task line — must be in
