@@ -4,6 +4,10 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-11-10
+
+First release of the `@quantmind-br/pi-goal-x` fork, based on pi-goal-x 0.34.1.
+
 ### Changed
 
 - Keep the goal tool profile fixed so providers keep the cached prompt prefix: the five execution tools (three with `disableTasks`) plus the three drafting tools stay declared in every state. Goal status, focus, task presence, and draft start/confirm/cancel no longer change tool declarations. Drafting tools reject calls without an active draft, and the five execution tools are blocked while a draft is active ([#126](https://github.com/tmonk/pi-goal-x/issues/126), [#127](https://github.com/tmonk/pi-goal-x/pull/127) by [@wuhaoyujerry](https://github.com/wuhaoyujerry)).

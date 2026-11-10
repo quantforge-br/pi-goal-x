@@ -19,8 +19,10 @@ The extension saves goal objectives, tasks, and progress across sessions. You ca
 
 ## Install
 
+This is the `@quantmind-br` fork of [pi-goal-x](https://github.com/tmonk/pi-goal-x). It keeps the goal tool profile fixed so provider prompt caches survive goal lifecycle changes; see `CHANGELOG.md`.
+
 ```bash
-pi install npm:pi-goal-x
+pi install npm:@quantmind-br/pi-goal-x
 ```
 
 ## Create a goal

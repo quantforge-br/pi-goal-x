@@ -1,7 +1,7 @@
 {
-  "name": "pi-goal-x",
-  "version": "0.34.1",
-  "description": "Adds /goal to pi: conversational goal planning, flexible or ordered goals, persistent progress, and an independent completion auditor.",
+  "name": "@quantmind-br/pi-goal-x",
+  "version": "0.35.0",
+  "description": "Fork of pi-goal-x with a fixed, cache-stable goal tool profile. Adds /goal to pi: conversational goal planning, flexible or ordered goals, persistent progress, and an independent completion auditor.",
   "license": "MIT",
   "author": "pi-goal-x contributors",
   "type": "module",
@@ -20,11 +20,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tmonk/pi-goal-x.git"
+    "url": "git+https://github.com/quantforge-br/pi-goal-x.git"
   },
-  "homepage": "https://github.com/tmonk/pi-goal-x#readme",
+  "homepage": "https://github.com/quantforge-br/pi-goal-x#readme",
   "bugs": {
-    "url": "https://github.com/tmonk/pi-goal-x/issues"
+    "url": "https://github.com/quantforge-br/pi-goal-x/issues"
   },
   "files": [
     "extensions",
@@ -47,7 +47,7 @@
     "extensions": [
       "extensions/goal.ts"
     ],
-    "image": "https://github.com/tmonk/pi-goal-x/raw/main/pi-goal-x.png"
+    "image": "https://github.com/quantforge-br/pi-goal-x/raw/main/pi-goal-x.png"
   },
   "scripts": {
     "check": "tsc --noEmit",

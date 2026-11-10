@@ -31,7 +31,7 @@ try {
  writeFileSync(path.join(project,'package.json'),JSON.stringify({private:true,type:'module'}));
  const peers=['@earendil-works/pi-ai','@earendil-works/pi-coding-agent','@earendil-works/pi-tui','typebox'].map(name=>`${name}@${JSON.parse(readFileSync(path.join(root,'node_modules',name,'package.json'),'utf8')).version}`);
  writeFileSync(path.join(evidence,'install.log'),run('npm',['install','--no-audit','--no-fund',tarball,...peers],project));
- const installed=path.join(project,'node_modules/pi-goal-x');
+ const installed=path.join(project,'node_modules',JSON.parse(readFileSync(path.join(root,'package.json'),'utf8')).name);
  const entry=path.join(installed,'extensions/goal.ts');
  assert.equal(lstatSync(installed).isSymbolicLink(),false,'package is installed, not linked');
  assert.equal(realpathSync(entry),entry,'entry does not resolve into the checkout');
