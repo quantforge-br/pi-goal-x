@@ -61,3 +61,26 @@ test("a task policy change still resets retention", () => {
 	assert.notDeepEqual(after.slice(0, before.length), before);
 	assert.deepEqual(contents(after).slice(-3), [parts.state, parts.tasks, parts.counters]);
 });
+
+const policyChanges: Array<[string, (goal: GoalRecord) => GoalRecord, Parameters<typeof goalPromptParts>[1]?]> = [
+	["status", goal => ({ ...goal, status: "paused" })],
+	["objective", goal => ({ ...goal, objective: "Ship four verified tasks" })],
+	["goal contract", goal => ({ ...goal, verificationContract: "npm test passes" })],
+	["mode", goal => ({ ...goal, sisyphus: true })],
+	["settings", goal => goal, { strictExecutionContract: true }],
+];
+
+for (const [name, change, settings] of policyChanges) test(`policy change (${name}) resets retention while tasks are in progress`, () => {
+	const retention = new LiveTailRetention();
+	const goal = { ...taskGoal(true), currentTaskId: "t1" };
+	const history = [msg("user", "Begin", 1)];
+	const before = goalPromptParts(goal);
+	const first = retention.apply("s", history, before).messages;
+	history.push(msg("assistant", "Work", 2));
+	const parts = goalPromptParts(change(goal), settings);
+	assert.notEqual(parts.state, before.state, `${name}: policy unchanged`);
+	const next = retention.apply("s", history, parts).messages;
+	assert.notDeepEqual(next.slice(0, first.length), first, `${name}: stale policy retained`);
+	assert.equal(contents(next).includes(before.state), false, `${name}: old policy replayed`);
+	assert.deepEqual(contents(next).slice(-3), [parts.state, parts.tasks, parts.counters]);
+});
