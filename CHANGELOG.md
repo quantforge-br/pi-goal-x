@@ -4,6 +4,10 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep task progress out of the request-only goal policy so starting, completing or skipping a task, or changing the current task, no longer resets live-tail retention and breaks the provider prompt-cache prefix (follow-up to #108, which measured four breaks across one three-task run). The task list now rides in its own `goal-tasks` tail between policy and counters, appended only when it changes and bounded by 16 KiB of retained snapshots (one reset on overflow). With `blockCompletion` enabled, the policy keeps a fixed TASK GATE line that defers to the latest task snapshot. Task setup that enables the gate still resets once.
+
 ## [0.35.0] — 2026-11-10
 
 First release of the `@quantmind-br/pi-goal-x` fork, based on pi-goal-x 0.34.1.
