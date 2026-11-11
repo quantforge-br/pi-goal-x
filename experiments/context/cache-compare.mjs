@@ -68,7 +68,11 @@ export function compareReports(baseline, candidate, {hostSystem}={}) {
  if(baseline.corpus) assert.deepEqual(candidate.corpus,baseline.corpus,'retention bounds/reset frequency changed');
  if(baseline.dependencies) assert.equal(candidate.dependencies,baseline.dependencies,'comparison dependencies differ');
  if(baseline.investigation) {
-  assert.deepEqual(candidate.investigation.stateChanges.map(({kind,prefixBreak})=>({kind,prefixBreak})),baseline.investigation.stateChanges.map(({kind,prefixBreak})=>({kind,prefixBreak})),'state reset classification changed');
+  const steps=candidate.investigation.stateChanges, prior=baseline.investigation.stateChanges;
+  assert.deepEqual(steps.map(step=>step.kind),prior.map(step=>step.kind),'state change sequence changed');
+  // Task progress rides in its own append-only snapshot, so dropping a
+  // release-era task-progress break is the only approved reclassification.
+  for(const [n,step] of steps.entries()) if(step.prefixBreak!==prior[n].prefixBreak) assert.ok(prior[n].prefixBreak&&step.kind.startsWith('complete-'),`state reset classification changed at ${step.kind}`);
   assert.equal(candidate.investigation.occupancy[1].breaks,0,'hidden occupancy invalidated retention');
   assert.equal(candidate.investigation.occupancy[1].appendedCounters,0,'hidden occupancy added redundant counters');
   for(const [n,step] of candidate.investigation.stateChanges.entries()) assert.ok(step.reusableBlocks>=baseline.investigation.stateChanges[n].reusableBlocks,'unchanged workflow lost reusable history');
@@ -132,7 +136,11 @@ export function compareReports(baseline, candidate, {hostSystem}={}) {
  return {scenarios:candidate.rows.length,approvedDifferences:differences};
 }
 
-/** Reproduce #108's four breaks in ten state/task transitions; keep safety resets. */
+/**
+ * Measure prefix breaks across ten state/task transitions (#108). Plain work
+ * never breaks; the gate compares the remaining classification with the
+ * pinned release, whose layout broke on every task transition.
+ */
 export function investigateCache() {
  let goal=createGoal({objective:'Complete three verified tasks',autoContinue:true,sisyphus:false},0);
  goal.id='cache-investigation';
@@ -147,11 +155,10 @@ export function investigateCache() {
   const next=retention.apply('state-workflow',history,goalPromptParts(goal)).messages;
   let shared=0;while(shared<previous.length && JSON.stringify(previous[shared])===JSON.stringify(next[shared]))shared++;
   const prefixBreak=shared!==previous.length;
-  assert.equal(prefixBreak,kind!=='work',`${kind}: unexplained reset/reuse`);
+  if(kind==='work') assert.equal(prefixBreak,false,'work: unexplained reset');
   stateChanges.push({kind,prefixBreak,reusableBlocks:shared,reusableBytes:Buffer.byteLength(JSON.stringify(previous.slice(0,shared))),requestBytes:Buffer.byteLength(JSON.stringify(next))});
   previous=next;
  }
- assert.equal(stateChanges.filter(step=>step.prefixBreak).length,4);
  const occupancy=[];
  for(const showContextUsage of [true,false]) {
   const retained=new LiveTailRetention();
@@ -166,6 +173,6 @@ export function investigateCache() {
   }
   occupancy.push({showContextUsage,requests:80,breaks,appendedCounters,totalRequestBytes});
  }
- return {stateChanges,occupancy,decision:'retain policy resets; task progress changes active task instructions and completion gates'};
+ return {stateChanges,occupancy,decision:'policy changes reset; task progress appends a task snapshot without resetting'};
 }
 

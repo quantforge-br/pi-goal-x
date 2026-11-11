@@ -10,6 +10,7 @@ import {
 	goalPrompt,
 	objectiveEditedPrompt,
 	staleContinuationPrompt,
+	taskGateBlock,
 	taskListBlock,
 	unfocusedOpenGoalsPrompt,
 } from "../extensions/prompts/goal-prompts.ts";
@@ -115,13 +116,13 @@ test("taskListBlock renders correctly with mixed statuses", () => {
 	assert.equal(block.includes("[x] t1"), false, "completed tasks collapse to the header count");
 	assert.equal(block.includes("[~] t3"), false, "skipped tasks collapse to the header count");
 	assert.match(block, /\[ \] t2/);
-	assert.match(block, /TASK GATE/);
+	assert.equal(block.includes("TASK GATE"), false, "the gate is policy, not part of the task snapshot");
 	// PR E compact-v2: visible pending items make the separate "Next pending"
 	// line redundant (it would duplicate t2).
 	assert.equal(block.includes("Next pending: t2"), false, "next-pending duplicates a visible pending item");
 });
 
-test("taskListBlock shows TASK GATE when blockCompletion enabled and pending tasks exist", () => {
+test("taskGateBlock points at the latest task snapshot when blockCompletion is enabled", () => {
 	const g = goal();
 	g.taskList = {
 		tasks: [{ id: "t1", title: "Task 1", status: "pending" }],
@@ -129,23 +130,24 @@ test("taskListBlock shows TASK GATE when blockCompletion enabled and pending tas
 		proposedAt: "2026-05-27T00:00:00.000Z",
 	};
 
-	const block = taskListBlock(g);
-	assert.ok(block);
-	assert.match(block, /TASK GATE/);
-	assert.match(block, /do not request completion/);
+	const gate = taskGateBlock(g);
+	assert.match(gate, /TASK GATE/);
+	assert.match(gate, /do not request completion while the latest \[TASK LIST\] snapshot/);
+	assert.equal(taskListBlock(g).includes("TASK GATE"), false);
+	assert.equal(taskGateBlock(g, { disableTasks: true }), "");
+	assert.equal(taskGateBlock({ ...g, taskList: { ...g.taskList, blockCompletion: false } }), "");
 });
 
-test("taskListBlock omits TASK GATE when no pending tasks", () => {
+test("taskGateBlock stays fixed while task progress changes", () => {
 	const g = goal();
 	g.taskList = {
-		tasks: [{ id: "t1", title: "Task 1", status: "complete" }],
+		tasks: [{ id: "t1", title: "Task 1", status: "pending" }],
 		blockCompletion: true,
 		proposedAt: "2026-05-27T00:00:00.000Z",
 	};
-
-	const block = taskListBlock(g);
-	assert.ok(block);
-	assert.equal(block.includes("TASK GATE"), false);
+	const pending = taskGateBlock(g);
+	const done = taskGateBlock({ ...g, taskList: { ...g.taskList, tasks: [{ id: "t1", title: "Task 1", status: "complete" }] } });
+	assert.equal(done, pending, "the gate must not change with pending counts");
 });
 
 test("taskListBlock returns empty string when no taskList", () => {

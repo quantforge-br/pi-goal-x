@@ -21,11 +21,15 @@ import { asRecord } from "./goal-record.ts";
  * edits), an unsafe insertion point, or overflow all perform one documented
  * full reset instead of silently shifting the prefix or corrupting message
  * structure.
+ *
+ * Task snapshots and usage counters are separate tail kinds. Each is appended
+ * only when it differs from its previous emission, so task progress extends
+ * the prefix instead of resetting it; only the policy block forces a reset.
  */
 
 export const LIVE_CONTEXT_TYPE = "pi-goal-live-context";
 
-export type LiveTailKind = "goal-state" | "goal-counters";
+export type LiveTailKind = "goal-state" | "goal-tasks" | "goal-counters";
 
 /** A request-only tail message. Never persisted; the hook replays it per request. */
 export interface LiveMessage {
@@ -48,17 +52,26 @@ export const MAX_RETAINED_LIVE_TAILS = 32;
 export const MAX_TRACKED_SESSIONS = 16;
 /** Extra historical observations, excluding the single current policy block. */
 export const MAX_RETAINED_COUNTER_BYTES = 4096;
+/**
+ * Retained task snapshots. Each task transition appends one snapshot, so a
+ * long task run stays prefix-stable until this bound forces a single reset.
+ */
+export const MAX_RETAINED_TASK_BYTES = 16_384;
 
 export interface FreshLiveTails {
 	state: string;
+	tasks?: string | undefined;
 	counters?: string | undefined;
 }
 
-interface RetainedTail {
-	anchorIndex: number;
-	anchorFingerprint: string | null;
+interface LiveBlock {
 	content: string;
 	kind: LiveTailKind;
+}
+
+interface RetainedTail extends LiveBlock {
+	anchorIndex: number;
+	anchorFingerprint: string | null;
 }
 
 interface SessionRetention {
@@ -68,8 +81,15 @@ interface SessionRetention {
 	baseFingerprints: Array<string | null>;
 }
 
-function freshBlocks(fresh: FreshLiveTails): string[] {
-	return fresh.counters === undefined ? [fresh.state] : [fresh.state, fresh.counters];
+function freshBlocks(fresh: FreshLiveTails): LiveBlock[] {
+	const blocks: LiveBlock[] = [{ content: fresh.state, kind: "goal-state" }];
+	if (fresh.tasks) blocks.push({ content: fresh.tasks, kind: "goal-tasks" });
+	if (fresh.counters !== undefined) blocks.push({ content: fresh.counters, kind: "goal-counters" });
+	return blocks;
+}
+
+function kindBytes(blocks: readonly LiveBlock[], kind: LiveTailKind): number {
+	return blocks.reduce((n, block) => block.kind === kind ? n + Buffer.byteLength(block.content) : n, 0);
 }
 
 /** Full-message digest, or null (never a match) when serialization fails. */
@@ -144,8 +164,10 @@ export class LiveTailRetention {
 		};
 		// A changed state block supersedes every previously sent tail: start
 		// fresh rather than leave a stale objective or a cancelled scheduling
-		// instruction lingering mid-history.
+		// instruction lingering mid-history. A dropped task snapshot or counter
+		// block resets too, so its last copy never reads as the current one.
 		if (session.lastFresh !== undefined && (session.lastFresh.state !== fresh.state
+			|| (session.lastFresh.tasks !== undefined && !fresh.tasks)
 			|| (session.lastFresh.counters !== undefined && fresh.counters === undefined))) reset();
 		// Tails anchored while history was empty would linger at the head once
 		// real history arrives. Reset once so fresh tails anchor at the tail.
@@ -178,34 +200,32 @@ export class LiveTailRetention {
 		}
 		if (valid < session.tails.length) reset();
 		const blocks = freshBlocks(fresh);
-		// Append only the suffix that differs from the last emitted tails, so
-		// unchanged content across repeats, tool loops, and history advances
-		// adds zero blocks while keeping the prefix literal.
+		// Append only blocks that differ from the last emitted block of the same
+		// kind, so unchanged content across repeats, tool loops, and history
+		// advances adds zero blocks while keeping the prefix literal. The state
+		// block never differs here: a changed state already reset above.
 		const previous = session.lastFresh === undefined ? [] : freshBlocks(session.lastFresh);
-		let shared = 0;
-		while (shared < blocks.length && shared < previous.length && blocks[shared] === previous[shared]) shared++;
+		let appended = blocks.filter(block => !previous.some(prior => prior.kind === block.kind && prior.content === block.content));
 		// Overflow is measured against what this request actually appends: an
 		// unchanged request adds nothing and must never trigger a reset.
-		if (session.tails.length + (blocks.length - shared) > MAX_RETAINED_LIVE_TAILS
-			|| session.tails.filter(tail => tail.kind === "goal-counters").reduce((n, tail) => n + Buffer.byteLength(tail.content), 0)
-				+ (fresh.counters === undefined || shared === blocks.length ? 0 : Buffer.byteLength(fresh.counters)) > MAX_RETAINED_COUNTER_BYTES) {
+		if (session.tails.length + appended.length > MAX_RETAINED_LIVE_TAILS
+			|| kindBytes(session.tails, "goal-counters") + kindBytes(appended, "goal-counters") > MAX_RETAINED_COUNTER_BYTES
+			|| kindBytes(session.tails, "goal-tasks") + kindBytes(appended, "goal-tasks") > MAX_RETAINED_TASK_BYTES) {
 			reset();
-			shared = 0;
+			appended = blocks;
 		}
 		const messages: Array<T | LiveMessage> = [...base];
 		for (let i = session.tails.length - 1; i >= 0; i--) {
 			const tail = session.tails[i]!;
 			messages.splice(tail.anchorIndex, 0, makeLiveMessage(tail.content));
 		}
-		for (let i = shared; i < blocks.length; i++) {
-			const content = blocks[i]!;
-			const kind: LiveTailKind = i === 0 ? "goal-state" : "goal-counters";
-			messages.push(makeLiveMessage(content));
-			session.tails.push({ anchorIndex: base.length, anchorFingerprint: fingerprints.at(-1) ?? null, content, kind });
+		for (const block of appended) {
+			messages.push(makeLiveMessage(block.content));
+			session.tails.push({ anchorIndex: base.length, anchorFingerprint: fingerprints.at(-1) ?? null, content: block.content, kind: block.kind });
 		}
 		session.baseFingerprints = fingerprints;
-		session.lastFresh = { state: fresh.state, counters: fresh.counters };
-		return { messages, transientContents: [...new Set([...session.tails.map(tail => tail.content), ...blocks])] };
+		session.lastFresh = { state: fresh.state, tasks: fresh.tasks || undefined, counters: fresh.counters };
+		return { messages, transientContents: [...new Set([...session.tails.map(tail => tail.content), ...blocks.map(block => block.content)])] };
 	}
 
 	contents(sessionKey: string): string[] | undefined {

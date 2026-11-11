@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LiveTailRetention, MAX_RETAINED_LIVE_TAILS } from "../extensions/goal-live-retention.ts";
+import { LiveTailRetention, MAX_RETAINED_LIVE_TAILS, MAX_RETAINED_TASK_BYTES } from "../extensions/goal-live-retention.ts";
 
 const msg = (role: string, content: string, timestamp: number): any => ({ role, content, timestamp });
 const contents = (messages: any[]): string[] => messages.map(message => message.content);
@@ -212,4 +212,46 @@ test("image and large tool-output edits invalidate hashes without changing store
  assert.deepEqual(out.messages.slice(0, base.length), base);
  assert.deepEqual(contents(out.messages.slice(base.length)), ["S", "new"]);
  assert.equal(base.length, 2);
+});
+
+test("task snapshots append in state, tasks, counters order without resetting", () => {
+	const retention = new LiveTailRetention();
+	const base1 = [msg("user", "h", 1)];
+	const first = retention.apply("s", base1, { state: "S", tasks: "T1", counters: "V1" });
+	assert.deepEqual(contents(first.messages), ["h", "S", "T1", "V1"]);
+	const base2 = [...base1, msg("assistant", "a", 2)];
+	const second = retention.apply("s", base2, { state: "S", tasks: "T2", counters: "V1" });
+	assert.deepEqual(second.messages.slice(0, first.messages.length), first.messages);
+	assert.deepEqual(contents(second.messages), ["h", "S", "T1", "V1", "a", "T2"]);
+	const base3 = [...base2, msg("assistant", "b", 3)];
+	const third = retention.apply("s", base3, { state: "S", tasks: "T2", counters: "V2" });
+	assert.deepEqual(third.messages.slice(0, second.messages.length), second.messages);
+	assert.deepEqual(contents(third.messages), ["h", "S", "T1", "V1", "a", "T2", "b", "V2"]);
+	assert.deepEqual(third.transientContents, ["S", "T1", "V1", "T2", "V2"]);
+});
+
+test("a dropped task snapshot resets so its last copy is not replayed", () => {
+	const retention = new LiveTailRetention();
+	const base = [msg("user", "h", 1)];
+	retention.apply("s", base, { state: "S", tasks: "T1", counters: "V" });
+	const next = retention.apply("s", base, { state: "S", counters: "V" });
+	assert.deepEqual(contents(next.messages), ["h", "S", "V"]);
+});
+
+test("retained task snapshots are bounded by their own byte budget with one reset", () => {
+	const retention = new LiveTailRetention();
+	const base = [msg("user", "h", 1)];
+	const snapshot = (i: number) => `[TASK LIST] ${i} ${"x".repeat(3000)}`;
+	let previous: any[] | null = null;
+	let breaks = 0;
+	for (let i = 0; i < 10; i++) {
+		const out = retention.apply("s", base, { state: "S", tasks: snapshot(i), counters: "V" });
+		if (previous !== null && JSON.stringify(out.messages.slice(0, previous.length)) !== JSON.stringify(previous)) breaks++;
+		previous = out.messages;
+		const taskBytes = (retention.contents("s") ?? []).filter(content => content.startsWith("[TASK LIST]")).reduce((n, content) => n + Buffer.byteLength(content), 0);
+		assert.ok(taskBytes <= MAX_RETAINED_TASK_BYTES, "task byte bound exceeded");
+	}
+	// Five ~3 KiB snapshots fit in 16 KiB; the sixth forces the single reset.
+	assert.equal(breaks, 1);
+	assert.equal(contents(previous!).filter(content => content === "S").length, 1, "a reset replays the policy once");
 });

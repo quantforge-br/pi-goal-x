@@ -24,9 +24,14 @@ test("cache comparison rejects missing scenarios, early text, schemas, options, 
  assert.throws(() => summarize({messages: [{role: "user", content: [{type: "text", text: "live", cache_control: {type: "ephemeral"}}]}]}, ["live"]), /marker on a transient/);
 });
 
-test("state-change measurement reproduces #108 and rejects extra or unexplained resets", () => {
+test("state-change measurement fixes #108 and rejects extra or unexplained resets", () => {
  const investigation = investigateCache();
- assert.equal(investigation.stateChanges.filter((step: any) => step.prefixBreak).length, 4);
+ // #108: only the policy change (task setup enables the completion gate)
+ // resets; the three task completions append snapshots instead.
+ assert.deepEqual(investigation.stateChanges.filter((step: any) => step.prefixBreak).map((step: any) => step.kind), ["set-tasks"]);
+ const release = structuredClone(investigation);
+ for (const step of release.stateChanges) if (step.kind.startsWith("complete-")) step.prefixBreak = true;
+ assert.equal(compareReports({...report(), investigation: release}, {...report(), investigation}).scenarios, 1);
  assert.equal(investigation.occupancy[1].appendedCounters, 0);
  assert.equal(investigation.occupancy[1].breaks, 0);
  assert.ok(investigation.occupancy[1].totalRequestBytes < investigation.occupancy[0].totalRequestBytes);
@@ -34,6 +39,8 @@ test("state-change measurement reproduces #108 and rejects extra or unexplained 
  for (const mutate of [
   (r: any) => {r.investigation.stateChanges[0].kind = "unknown-reset";},
   (r: any) => {r.investigation.stateChanges[0].prefixBreak = true;},
+  (r: any) => {r.investigation.stateChanges[1].prefixBreak = false;},
+  (r: any) => {r.investigation.stateChanges[3].prefixBreak = true;},
   (r: any) => {r.investigation.occupancy[1].breaks = 1;},
   (r: any) => {r.investigation.occupancy[1].appendedCounters = 1;},
   (r: any) => {r.corpus.breaks++;},

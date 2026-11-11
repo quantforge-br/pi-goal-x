@@ -100,6 +100,10 @@ function renderPendingTasks(tasks: GoalTask[], indent: number, rendered: { count
  * indentation and contract snippets; completed/skipped are collapsed to the
  * header counts. Previously the ENTIRE tree (up to 50 tasks + subtrees) was
  * injected into every continuation prompt — most of it already-completed work.
+ *
+ * This is the request-only task snapshot: it changes with task progress, so it
+ * travels apart from the stable policy block (see goalPromptParts). The
+ * completion gate is policy and lives in taskGateBlock.
  */
 export function taskListBlock(goal: GoalRecord, settings?: GoalSettings): string {
 	if (settings?.disableTasks) return "";
@@ -145,10 +149,17 @@ export function taskListBlock(goal: GoalRecord, settings?: GoalSettings): string
 			lines.push(`  ${hiddenPending} additional pending tasks omitted; retrieve with get_goal(section="tasks").`);
 		}
 	}
-	if (goal.taskList.blockCompletion && pending! > 0) {
-		lines.push("  TASK GATE: do not request completion while tasks remain in [ ] pending state");
-	}
 	return lines.join("\n");
+}
+
+/**
+ * Stable completion gate for the policy block. It depends only on the
+ * blockCompletion setting, never on how many tasks are pending, so task
+ * progress cannot change the policy block and reset prompt-cache retention.
+ */
+export function taskGateBlock(goal: GoalRecord, settings?: GoalSettings): string {
+	if (settings?.disableTasks || goal.taskList?.blockCompletion !== true) return "";
+	return "TASK GATE: do not request completion while the latest [TASK LIST] snapshot shows tasks in [ ] pending state.";
 }
 
 /** Bounded verification-contract block. */
@@ -207,46 +218,44 @@ const promptFragmentCache: Array<{key: readonly unknown[]; value: string; chars:
 let promptCacheChars = 0;
 
 function cachedPrompt(goal: GoalRecord, settings: GoalSettings | undefined, kind: "goal" | "continuation", build: () => string): string {
+ // Task progress is deliberately absent: it renders in the separate task
+ // snapshot, so starting or finishing a task reuses the cached policy block.
  const key = [kind, goal.id, goal.status, goal.autoContinue, goal.sisyphus, goal.objective,
-  goal.verificationContract, settings?.disableTasks ? undefined : taskIndex(goal.taskList?.tasks),
-  goal.taskList?.blockCompletion, promptProfile(), goal.currentTaskId, settings?.disableTasks, settings?.disableContracts, settings?.maxAutonomousRuns !== 0, settings?.strictExecutionContract === true, !!goal.scheduler?.wait, settings?.commands ? JSON.stringify(settings.commands) : undefined];
+  goal.verificationContract, goal.taskList?.blockCompletion, promptProfile(), settings?.disableTasks, settings?.disableContracts, settings?.maxAutonomousRuns !== 0, settings?.strictExecutionContract === true, !!goal.scheduler?.wait, settings?.commands ? JSON.stringify(settings.commands) : undefined];
  for (let i = promptFragmentCache.length - 1; i >= 0; i--) {
   const entry = promptFragmentCache[i]!;
   if (key.every((part, j) => part === entry.key[j])) return entry.value;
  }
  const value = build();
  // Include source text retained by this entry in the cache's memory allowance.
- const chars = goal.objective.length + (goal.verificationContract?.length ?? 0) + value.length
-  + (goal.taskList ? goal.taskList.tasks.reduce((n, task) => n + retainedTaskChars(task), 0) : 0);
+ const chars = goal.objective.length + (goal.verificationContract?.length ?? 0) + value.length;
  if (chars <= 2_000_000) {
   while (promptFragmentCache.length >= 32 || promptCacheChars + chars > 2_000_000) promptCacheChars -= promptFragmentCache.shift()!.chars;
   promptFragmentCache.push({key, value, chars}); promptCacheChars += chars;
  }
  return value;
 }
-function retainedTaskChars(task: GoalTask): number {
- return task.id.length + task.title.length + (task.verificationContract?.length ?? 0) + (task.evidence?.length ?? 0)
-  + (task.skipReason?.length ?? 0) + (task.subtasks?.reduce((n, child) => n + retainedTaskChars(child), 0) ?? 0);
-}
 
-export function goalPromptParts(goal: GoalRecord, settings?: GoalSettings, contextUsage?: GoalContextUsage): { state: string; counters: string } {
-	// The policy block changes only when the goal itself changes; the counters
-	// change nearly every turn. Splitting them lets request-only injection retain
-	// each at its own rate so consecutive provider requests stay prefix-stable.
+export function goalPromptParts(goal: GoalRecord, settings?: GoalSettings, contextUsage?: GoalContextUsage): { state: string; tasks?: string; counters: string } {
+	// The policy block changes only when the goal itself changes; the task
+	// snapshot changes with task progress and the counters nearly every turn.
+	// Splitting them lets request-only injection retain each at its own rate so
+	// consecutive provider requests stay prefix-stable.
 	// Scheduling instructions ride with the policy block: they are cleared by
 	// omission, so a retained copy would keep issuing a cancelled order.
 	const fixed = cachedPrompt(goal, settings, "goal", () => buildGoalPrompt(goal, settings));
 	const { runs, instructions } = schedulerSummaryParts(goal.scheduler, settings?.maxAutonomousRuns, settings?.showAutonomousRuns, settings?.idleContinuationBackoff === true, settings?.commands);
 	const limits = `Limits: lifetime tokens=${goal.tokenBudget ?? "none"}; runs=${settings?.maxAutonomousRuns ?? "unlimited"}.`;
-	const state = [fixed, instructions, limits, "Usage spans goal turns, not context. Latest snapshot supersedes earlier snapshots."].filter(Boolean).join("\n");
+	const state = [fixed, instructions, limits, "Usage spans goal turns, not context. The latest task and usage snapshots supersede earlier snapshots."].filter(Boolean).join("\n");
+	const tasks = taskListBlock(goal, settings);
 	const context = settings?.showContextUsage === true ? `\n${contextUsageLine(contextUsage)}` : "";
 	const counters = `Goal snapshot: ${formatUsage(goal)}${context}\n${runs}`;
-	return { state, counters };
+	return tasks ? { state, tasks, counters } : { state, counters };
 }
 
 export function goalPrompt(goal: GoalRecord, settings?: GoalSettings): string {
-	const { state, counters } = goalPromptParts(goal, settings);
-	return `${state}\n${counters}`;
+	const { state, tasks, counters } = goalPromptParts(goal, settings);
+	return [state, tasks, counters].filter(Boolean).join("\n");
 }
 
 function buildGoalPrompt(goal: GoalRecord, settings?: GoalSettings): string {
@@ -256,7 +265,7 @@ function buildGoalPrompt(goal: GoalRecord, settings?: GoalSettings): string {
   `[PI GOAL ACTIVE goalId=${goal.id}]`,
   lifecyclePolicyBlock(settings?.maxAutonomousRuns !== 0, settings?.strictExecutionContract === true || !!goal.scheduler?.wait, settings?.commands), sisyphusDisciplineBlock(goal),
   `Status: ${statusLabel(goal)}\nMode: ${goal.sisyphus ? "sisyphus" : "regular"}`,
-  untrustedObjectiveBlock(goal), taskListBlock(goal, settings), verificationContractBlock(goal, settings),
+  untrustedObjectiveBlock(goal), taskGateBlock(goal, settings), verificationContractBlock(goal, settings),
  ].filter(Boolean).join("\n\n");
 }
 

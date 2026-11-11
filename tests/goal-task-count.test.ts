@@ -42,7 +42,8 @@ for (const pending of [false, true]) for (const approved of [false, true]) test(
   assert.equal(!!taskCompletionBlockWarning(taskList), pending);
   const prompt = goalPromptParts(h.core.state.goal!).state;
   const auditPrompt = buildGoalAuditorPrompt({goal: h.core.state.goal!, detailedSummary: "verified fixture"});
-  assert.equal(/TASK GATE:/.test(prompt), pending);
+  // The policy gate is fixed by blockCompletion; only the auditor reports pending work.
+  assert.match(prompt, /TASK GATE:/);
   assert.equal(/TASK GATE:/.test(auditPrompt), pending);
   const result = await h.call("update_goal", {status: "complete"});
   assert.equal(audits, pending ? 0 : 1);
