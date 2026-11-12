@@ -68,6 +68,7 @@
     ".tests/goal-surface-baseline.test.ts",
     ".tests/goal-task-count.test.ts",
     ".tests/goal-task-lifecycle.test.ts",
+    ".tests/goal-task-snapshot-retention.test.ts",
     ".tests/goal-task-tools.test.ts",
     ".tests/goal-tasks.test.ts",
     ".tests/goal-tool-inputs.test.ts",
