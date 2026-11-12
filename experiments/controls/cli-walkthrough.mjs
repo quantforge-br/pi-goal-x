@@ -55,7 +55,8 @@ async function boot(label,settings={},scenario='normal'){
  const requests=()=>fs.existsSync(path.join(cwd,'requests.json'))?JSON.parse(fs.readFileSync(path.join(cwd,'requests.json'),'utf8')):[];
  const goals=()=>{
   const dir=path.join(cwd,'.pi/goals');if(!fs.existsSync(dir))return [];
-  return fs.readdirSync(dir).filter(file=>file.startsWith('active_goal_')).map(file=>{
+  // Skip the atomic-write temp file: it can be renamed away before it is read.
+  return fs.readdirSync(dir).filter(file=>file.startsWith('active_goal_')&&file.endsWith('.md')).map(file=>{
    const text=fs.readFileSync(path.join(dir,file),'utf8');return JSON.parse(text.slice(0,text.indexOf('\n\n# Goal Prompt')));
   });
  };
