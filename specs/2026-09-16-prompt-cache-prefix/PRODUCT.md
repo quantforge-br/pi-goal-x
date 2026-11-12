@@ -10,8 +10,8 @@ Advertise the same goal and drafting tools with no focused goal, across lifecycl
 
 Scope: fix tool/rules prefix churn and validate it offline. Do not change live-tail retention without request-payload evidence. Do not modify the installed npm package as part of this repository patch.
 
-## 2026-11-11: request-only counters under explicit markers
+## 2026-11-11: request-only live tail under explicit markers
 
-Payload evidence from a 139-request Anthropic session: usage counters change on almost every request, each change retained one more tail, and the 32-tail bound forced a full retention reset about every 30 requests. Every reset removed the retained tails from mid-history and the provider re-wrote the cached conversation (four resets, 31k–89k tokens each).
+Payload evidence from a 139-request Anthropic session: usage counters change on almost every request, each change retained one more tail, and the 32-tail bound forced a full retention reset about every 30 requests. Every reset removed the retained tails from mid-history and the provider re-wrote the cached conversation (four resets, 31k–89k tokens each). A pause and a resume changed the policy block and reset retention twice more (45k tokens each).
 
-In sessions whose payloads carry an explicit cache marker, counter changes must never break the cached prefix. The current counters are sent on every request after the relocated breakpoint and are not replayed in later requests. The policy block and task snapshots stay retained in place with their existing bounds and reset rules. Sessions without explicit markers keep the retained-counter layout, because implicit caches still need each request to extend the previous one.
+In sessions whose payloads carry an explicit cache marker, goal state must never rewrite cached history: not counter changes, not task progress, not policy changes such as pause, resume or an objective edit. Policy, task snapshot and counters are sent on every request after the relocated breakpoint and are not replayed in later requests. The accepted cost is that this tail is billed on every request (uncached input, or a cache write when the upstream adds its own trailing breakpoint) instead of being read from cache. Sessions without explicit markers keep the retained layout, because implicit caches still need each request to extend the previous one.
