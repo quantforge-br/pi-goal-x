@@ -4,6 +4,8 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+## [0.35.3] — 2026-11-11
+
 ### Fixed
 
 - Send the whole live goal tail (policy, task snapshot and counters) request-only in sessions whose payloads carry explicit cache markers (Anthropic `cache_control`, Bedrock `cachePoint`). 0.35.2 stopped retaining counters there but kept the policy block and task snapshots in place, so every pause, resume or other policy change, and every 16 KiB of task snapshots, still removed them from mid-history and made the provider re-write the conversation after their anchor. Without the periodic counter resets that anchor could be the start of the session. Nothing is retained under explicit markers now, so goal state never rewrites cached history. The tail is billed on each request instead of being read from cache: as uncached input, or as a cache write when the upstream adds its own trailing breakpoint (about 2k tokens for an active goal with a 32-task list in the measured session, about 0.7k without tasks). Sessions without explicit markers are unchanged.
