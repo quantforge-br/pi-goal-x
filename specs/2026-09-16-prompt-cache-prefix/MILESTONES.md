@@ -1,5 +1,15 @@
 # Implementation log
 
+## 2026-11-11: request-only counters under explicit markers
+
+- Evidence: one 139-request Anthropic session (Pi 1.5.2, 1h cache writes) with a context-compression proxy that records every request. Its ledger attributed four misses to a client-side mid-history rewrite, each landing 27–29 requests after the previous one and re-writing 31k–89k tokens. Before each miss, 29–31 retained tails (`Goal snapshot:` counters plus a few task snapshots) had vanished from the resent history at once: the 32-tail overflow reset. Two further misses followed a pause and a resume (policy `Status:` change); those are intended resets and are unchanged.
+- Cause: counters include elapsed time and tokens, so they differ on every request and each difference retained one tail. The "at most one prefix break per 32 state changes" bound therefore meant one break per ~30 requests.
+- Fix: detect explicit markers from the relocation result in before_provider_request and keep counters request-only for that session/model identity. Policy and task snapshots are still retained. Implicit-cache sessions are untouched.
+- Rejected: raising the tail/byte bounds (only delays the reset and grows the wire), coarser counters (still resets, loses information), and deciding by `ctx.model.api` (misses Anthropic-format Chat Completions adapters).
+- Not addressed: task snapshots still reset retention when 16 KiB of snapshots accumulate, and policy changes (pause/resume, objective edits) still reset once each.
+- Tests: six LiveTailRetention cases (1,000-request churn with zero prefix breaks, retry, task snapshots, late marker, dropped counters, cleared session), two handler-level cases in goal-scheduler.test.ts, and a real-serializer hook chain of 80 requests for Anthropic Messages and Anthropic-format Chat Completions in prompt-cache-sdk-worker.ts. The handler and serializer cases fail on the previous source. One existing handler test sent a marked payload and asserted the retained-counter layout; it now asserts the request-only layout, and a new case covers the unmarked layout.
+- Validation: `npm run check`, `npm run lint` and `git diff --check` pass; all 1,327 tests across 98 unit/integration/e2e files pass under an isolated HOME. `npm run context:gate`, `npm run context:cache-gate` and `npm run test:selfcheck` fail identically on the untouched HEAD (baseline drift, dependency hash, unlisted goal-task-snapshot-retention test) and were left alone. No live provider request was made; live hit rates are unmeasured.
+
 ## 2026-11-04: issue #126 stable tool profiles
 
 - Posted the approved investigation comment without changing its draft: https://github.com/tmonk/pi-goal-x/issues/126#issuecomment-6642948025. The earlier status/focus stability claims below describe the original design; issue #126 exposed later lifecycle gating in applicableGoalTools.

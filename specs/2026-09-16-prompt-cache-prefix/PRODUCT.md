@@ -9,3 +9,9 @@ Caching remains controlled by Pi and the provider; do not override user cache se
 Advertise the same goal and drafting tools with no focused goal, across lifecycle and focus changes, and while entering or leaving drafting. Only the explicit disableTasks setting may change this extension's tool selection. Preserve host tools and reject invalid operations at execution time. During an active draft, block the five ordinary goal tools so unconfirmed proposals cannot mutate goals. Keep existing draft confirmation, cancellation, rehydration, and stale-dispatch guards intact.
 
 Scope: fix tool/rules prefix churn and validate it offline. Do not change live-tail retention without request-payload evidence. Do not modify the installed npm package as part of this repository patch.
+
+## 2026-11-11: request-only counters under explicit markers
+
+Payload evidence from a 139-request Anthropic session: usage counters change on almost every request, each change retained one more tail, and the 32-tail bound forced a full retention reset about every 30 requests. Every reset removed the retained tails from mid-history and the provider re-wrote the cached conversation (four resets, 31k–89k tokens each).
+
+In sessions whose payloads carry an explicit cache marker, counter changes must never break the cached prefix. The current counters are sent on every request after the relocated breakpoint and are not replayed in later requests. The policy block and task snapshots stay retained in place with their existing bounds and reset rules. Sessions without explicit markers keep the retained-counter layout, because implicit caches still need each request to extend the previous one.
