@@ -35,7 +35,7 @@ function screenShot(label) {
 	const lines = [];
 	for (let y = 0; y < b.length; y++) lines.push(strip(b.getLine(y)?.translateToString(true) ?? ""));
 	const last3 = lines.slice(-3).join(" | ");
-	const hasWidget = lines.some((l) => l.includes("pi-goal-x"));
+	const hasWidget = lines.some((l) => l.includes("╭─ goal ─"));
 	const hasScroll = last3.includes("SCROLL") || last3.includes("scroll") || /[0-9]+\/[0-9]+/.test(last3);
 	console.log(`[${label}] widget=${hasWidget} scrollInd=${hasScroll}`);
 	console.log(`   status: ${last3}`);

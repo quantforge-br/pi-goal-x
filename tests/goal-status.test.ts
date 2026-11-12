@@ -73,7 +73,7 @@ function base(): Parameters<typeof buildGoalStatusText>[0] {
 
 test("standard mode renders the compact dashboard from the shared model (§13.1)", () => {
 	const text = buildGoalStatusText(base());
-	assert.match(text, /╭─ pi-goal-x ─ Add CSV export to reports/);
+	assert.match(text, /╭─ goal ─ Add CSV export to reports/);
 	assert.match(text, /goal: running \[12m47s 18\.2K\] \(\+2 open\)/);
 	// The top-level task list is part of the compact dashboard now (step-11).
 	assert.match(text, /├─ Tasks /);

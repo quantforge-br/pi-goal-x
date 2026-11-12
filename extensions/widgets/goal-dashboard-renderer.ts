@@ -40,6 +40,9 @@ type RenderColor = Extract<ThemeColor, "accent" | "warning" | "success" | "error
 const H = "─";
 const V = "│";
 
+/** Brand shown in every dashboard box header. */
+const DASHBOARD_LABEL = "goal";
+
 /** Box chrome: the entire frame — corners, top/bottom dashes, left/right
  * edges and interior rules — is one tone: the theme's neutral gray (muted).
  * No blue tinge: the chrome is grey, while the content inside is
@@ -303,7 +306,7 @@ export function renderCompactDashboard(
 	const inner = safeWidth - 2;
 	const lines: string[] = [];
 
-	lines.push(boxHeader(theme, safeWidth, `${accent(theme, "pi-goal-x")} ${frame(theme, `─ ${model.title}`)}`));
+	lines.push(boxHeader(theme, safeWidth, `${accent(theme, DASHBOARD_LABEL)} ${frame(theme, `─ ${model.title}`)}`));
 
 	// Status line.
 	if (model.status.code === "complete") {
@@ -457,7 +460,7 @@ export function renderExpandedDashboard(
 	const inner = safeWidth - 2;
 	const lines: string[] = [];
 
-	lines.push(boxHeader(theme, safeWidth, `${accent(theme, "pi-goal-x")} ${frame(theme, `─ ${model.title}`)}`));
+	lines.push(boxHeader(theme, safeWidth, `${accent(theme, DASHBOARD_LABEL)} ${frame(theme, `─ ${model.title}`)}`));
 
 	lines.push(boxLine(theme, safeWidth, statusLine(theme, model)));
 	for (const row of model.scheduling ?? []) lines.push(boxLine(theme, safeWidth, muted(theme, fit(row, inner))));
@@ -587,7 +590,7 @@ function wrappedBlock(theme: Theme, width: number, label: string, text: string):
 export function renderUnfocusedDashboard(openGoalCount: number, theme: Theme, width: number, commands?: GoalCommands): string[] {
 	const safeWidth = Math.max(10, width);
 	const lines: string[] = [];
-	lines.push(boxHeader(theme, safeWidth, frame(theme, "pi-goal-x ─ Goal focus required")));
+	lines.push(boxHeader(theme, safeWidth, frame(theme, `${DASHBOARD_LABEL} ─ Goal focus required`)));
 	const goals = openGoalCount === 1 ? "1 open goal is available." : `${openGoalCount} open goals are available.`;
 	lines.push(boxLine(theme, safeWidth, muted(theme, goals)));
 	lines.push(boxLine(theme, safeWidth, muted(theme, `Run ${commandHint("goal-focus", commands)} to choose the goal for this session.`)));

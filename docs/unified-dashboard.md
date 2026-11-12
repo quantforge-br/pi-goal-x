@@ -21,7 +21,7 @@ activity are never fabricated for display.
 Always visible above the editor while a goal is focused:
 
 ```text
-╭─ pi-goal-x ─ Add CSV export to reports ────────────────────────────────────────────────╮
+╭─ goal ─ Add CSV export to reports ─────────────────────────────────────────────────────╮
 │ goal: running [12m47s 18.2K] (+2 open)                                                 │
 ├─ Tasks · ✓3 done · 2 open ─────────────────────────────────── [████░░] · Sub 2/3 [██░] ┤
 │ ✓ t1  Review reports page and data source                                              │
@@ -92,7 +92,7 @@ omitted entirely.
 `Ctrl+Shift+T` expands the same component:
 
 ```text
-╭─ pi-goal-x ─ Add CSV export to reports ─────────────── 12m47s · 18.2K tok ─╮
+╭─ goal ─ Add CSV export to reports ──────────────────── 12m47s · 18.2K tok ─╮
 │ Status: ● In progress · Focused: yes · Other goals: 2                      │
 │ File: .pi/goals/active_goal_...                                             │
 ├─ Progress ──────────────────────────────────────────────────────────────────┤
@@ -178,7 +178,7 @@ without the symbols.
 When open goals exist but none is focused:
 
 ```text
-╭─ pi-goal-x ─ Goal focus required ───────────────────────────────────────────╮
+╭─ goal ─ Goal focus required ────────────────────────────────────────────────╮
 │ 3 open goals are available.                                                │
 │ Run /goal-focus to choose the goal for this session.                       │
 ╰─────────────────────────────────────────────────────────────────────────────╯

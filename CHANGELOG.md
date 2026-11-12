@@ -4,6 +4,10 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Show `goal` instead of `pi-goal-x` as the brand in the dashboard box headers (compact, expanded and unfocused panels).
+
 ### Fixed
 
 - Keep usage counters request-only in sessions whose payloads carry explicit cache markers (Anthropic `cache_control`, Bedrock `cachePoint`). The counters change on almost every request, so retaining them filled the 32-tail window and forced a full retention reset about every 30 requests; each reset removed the retained tails from mid-history and re-wrote the cached conversation. A measured 139-request Anthropic session lost its prefix four times this way, re-writing 31k–89k tokens each time. The current counters now ride after the relocated breakpoint and are never replayed; policy and task snapshots stay retained in place. Sessions without explicit markers are unchanged.

@@ -44,7 +44,7 @@ function auditorProgress(overrides: Partial<AuditorWidgetProgress> = {}): Audito
 
 test("renderGoalWidgetLines renders the unified compact dashboard", () => {
 	const lines = renderGoalWidgetLines(goal(), theme, 100);
-	assert.match(lines[0]!, /^╭─ pi-goal-x ─ Componentize the goal widget/);
+	assert.match(lines[0]!, /^╭─ goal ─ Componentize the goal widget/);
 	assert.doesNotMatch(lines[0]!, /1m05s/, "usage moved from the header into the status line");
 	assert.match(lines[1]!, /goal: sisyphus running \[1m05s 2\.5K\]/);
 	assert.match(lines.at(-1) ?? "", /^╰─ .*Ctrl\+Shift\+T: expand/);
@@ -105,7 +105,7 @@ test("renderGoalWidgetLines shows other open goals and unfocused multi-goal guid
 	assert.match(focused[1]!, /goal: sisyphus running \[1m05s 2\.5K\] \(\+2 open\)/);
 
 	const unfocused = renderGoalWidgetLines(null, theme, 100, { openGoalCount: 2 });
-	assert.match(unfocused[0]!, /^╭─ pi-goal-x ─ Goal focus required/);
+	assert.match(unfocused[0]!, /^╭─ goal ─ Goal focus required/);
 	assert.match(unfocused.join("\n"), /2 open goals are available/);
 	assert.match(unfocused.join("\n"), /\/goal-focus/);
 });
@@ -172,7 +172,7 @@ test("audit progress overrides normal goal display when provided", () => {
 	const progress = auditorProgress();
 	const lines = renderGoalWidgetLines(goal(), theme, 100, { auditorProgress: progress });
 	assert.match(lines[0]!, /Independent completion audit/);
-	assert.doesNotMatch(lines[0]!, /pi-goal-x ─/);
+	assert.doesNotMatch(lines[0]!, /╭─ goal ─/);
 });
 
 test("finished audit shows the result card view (§15.4)", () => {
@@ -331,7 +331,7 @@ test("GoalWidgetComponent renders through mock TUI path", () => {
 
 	const lines = component.render(100);
 	assert.ok(lines.length > 0, "Component renders lines");
-	assert.match(lines[0]!, /^╭─ pi-goal-x ─ Componentize the goal widget/);
+	assert.match(lines[0]!, /^╭─ goal ─ Componentize the goal widget/);
 	assert.match(lines[1]!, /goal: sisyphus running \[1m05s 2\.5K\]/);
 });
 
@@ -699,10 +699,10 @@ test("audit mode temporarily replaces the normal view and returns after", () => 
 	});
 	const during = component.render(100).join("\n");
 	assert.match(during, /Independent completion audit/);
-	assert.doesNotMatch(during, /pi-goal-x ─/);
+	assert.doesNotMatch(during, /╭─ goal ─/);
 	audit = null;
 	const after = component.render(100).join("\n");
-	assert.match(after, /pi-goal-x ─/);
+	assert.match(after, /╭─ goal ─/);
 	assert.doesNotMatch(after, /audit complete|auditing/);
 });
 
@@ -1016,7 +1016,7 @@ test("renderGoalWidgetLines accepts an optional terminalRows bound (pure path)",
 	const bounded = renderGoalWidgetLines(withGoal, theme, 100, { openGoalCount: 1, terminalRows: rows });
 	const cap = Math.max(1, rows - WIDGET_HEIGHT_RESERVE);
 	assert.ok(bounded.length <= cap, `bounded to ${cap}, got ${bounded.length}`);
-	assert.match(bounded[0]!, /^╭─ pi-goal-x/, "header survives the slice");
+	assert.match(bounded[0]!, /^╭─ goal ─/, "header survives the slice");
 });
 
 test("GoalWidgetComponent with terminalRows caps the compact dashboard at equal terminal height", () => {
@@ -1031,7 +1031,7 @@ test("GoalWidgetComponent with terminalRows caps the compact dashboard at equal 
 	const lines = component.render(100);
 	const cap = Math.max(1, 13 - WIDGET_HEIGHT_RESERVE);
 	assert.ok(lines.length <= cap, `rendered ${lines.length} lines, cap ${cap}`);
-	assert.match(lines[0]!, /^╭─ pi-goal-x/, "header preserved");
+	assert.match(lines[0]!, /^╭─ goal ─/, "header preserved");
 	assert.match(lines[1]!, /goal: sisyphus running/, "status line preserved");
 });
 
@@ -1048,7 +1048,7 @@ test("GoalWidgetComponent caps the expanded dashboard at equal terminal height",
 	const lines = component.render(100);
 	const cap = Math.max(1, 24 - WIDGET_HEIGHT_RESERVE);
 	assert.ok(lines.length <= cap, `rendered ${lines.length} lines, cap ${cap}`);
-	assert.match(lines[0]!, /^╭─ pi-goal-x/, "header preserved");
+	assert.match(lines[0]!, /^╭─ goal ─/, "header preserved");
 });
 
 test("GoalWidgetComponent leaves the expanded dashboard unchanged when it fits", () => {
@@ -1103,7 +1103,7 @@ test("GoalWidgetComponent bounds the audit dashboard, result card, debug panel, 
 	// Debug panel at its natural height (36) on a 36-row terminal.
 	const debug = mk({ rows: 36, extra: { getDebugMode: () => true } }).render(100);
 	assert.ok(debug.length <= Math.max(1, 36 - WIDGET_HEIGHT_RESERVE), `debug rendered ${debug.length}`);
-	assert.match(debug[0]!, /^╭─ pi-goal-x/, "dashboard header preserved");
+	assert.match(debug[0]!, /^╭─ goal ─/, "dashboard header preserved");
 
 	// Unfocused panel on a 4-row terminal.
 	const unfocused = new GoalWidgetComponent({

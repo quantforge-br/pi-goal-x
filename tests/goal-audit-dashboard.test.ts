@@ -184,6 +184,6 @@ test("the normal dashboard returns after the audit result card clears", () => {
 	// The goal stays open: clearing the card restores the normal dashboard.
 	auditResult = null;
 	const normal = component.render(100).join("\n");
-	assert.match(normal, /pi-goal-x ─ Fix the parser/);
+	assert.match(normal, /╭─ goal ─ Fix the parser/);
 	assert.doesNotMatch(normal, /Audit result/);
 });

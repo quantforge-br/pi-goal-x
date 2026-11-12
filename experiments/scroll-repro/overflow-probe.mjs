@@ -143,7 +143,7 @@ async function probe(rows, chatLines, editorLines) {
 	const editorIdx = frame1.findIndex((l) => l.startsWith("❯"));
 	const widgetEnd = editorIdx >= 0 ? editorIdx : frame1.length;
 	// widget span: from the box top to the editor
-	const boxTop = frame1.findIndex((l) => l.includes("pi-goal-x"));
+	const boxTop = frame1.findIndex((l) => l.includes("╭─ goal ─"));
 	const widgetH = boxTop >= 0 ? widgetEnd - boxTop : -1;
 	const overflow = widgetH > 0 && rows < widgetH + (frame1.length - widgetEnd);
 	const changed = w2.c2 - w0.c2;

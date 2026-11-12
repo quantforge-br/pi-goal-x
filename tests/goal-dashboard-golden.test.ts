@@ -231,7 +231,7 @@ test("palette: neutral-gray chrome, colour-coded content (§5)", () => {
 	assert.ok(byColor("accent").some((v) => v.includes("Add the download button")), "current task title is accent too");
 	// The compact header brand is teal; the progress bar is fully muted —
 	// neutral-gray fill with dim empty cells, matching the muted percentage.
-	assert.ok(byColor("accent").some((v) => v.includes("pi-goal-x")), "brand is accent");
+	assert.ok(byColor("accent").some((v) => v === "goal"), "brand is accent");
 	assert.ok(muted.some((v) => /^█+$/.test(v)), "progress bar fill is neutral gray");
 	assert.ok(byColor("dim").some((v) => /^░+$/.test(v)), "progress bar empty cells are dim");
 	// No accent progress numbers remain: the tasks counts, the header bar
@@ -378,7 +378,7 @@ test("compact: running with tasks at 100 shows status, header counts + bar, curr
 	assert.ok(model);
 	const lines = renderCompactDashboard(model, theme, 100);
 	const text = lines.join("\n");
-	assert.match(lines[0]!, /^╭─ pi-goal-x ─ Add CSV export to reports/);
+	assert.match(lines[0]!, /^╭─ goal ─ Add CSV export to reports/);
 	assert.doesNotMatch(lines[0]!, /12m47s/, "usage moved from the header into the status line");
 	assert.match(lines[1]!, /goal: running \[12m47s 18\.2K\] \(\+2 open\)/);
 	// Header row: counts first (skipped counted as done → ✓3), task bar, then
