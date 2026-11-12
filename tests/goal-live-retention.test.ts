@@ -257,48 +257,48 @@ test("retained task snapshots are bounded by their own byte budget with one rese
 });
 
 // Explicit-marker sessions (Anthropic cache_control, Bedrock cachePoint): the
-// relocated breakpoint sits ahead of the live tail, so everything before the
-// trailing counters is the cacheable prefix and must survive every request.
-test("explicit-marker sessions keep counters request-only and never reset on counter churn", () => {
+// relocated breakpoint sits ahead of the live tail, so real history is the
+// cacheable prefix. No live block may ever sit inside it, whatever changes.
+test("explicit-marker sessions send every live block request-only and never rewrite history", () => {
 	const retention = new LiveTailRetention();
 	const base: any[] = [msg("user", "h", 1)];
-	let previous: any[] | null = null;
 	for (let i = 0; i < 1000; i++) {
-		const out = retention.apply("s", base, { state: "S", counters: `V${i}` });
+		// Counters change every request, tasks every 7, the policy (pause/resume) every 50.
+		const fresh = { state: `S${Math.floor(i / 50)}`, tasks: `T${Math.floor(i / 7)}`, counters: `V${i}` };
+		const out = retention.apply("s", base, fresh);
 		// The provider hook reports the relocated marker after every request.
 		retention.noteExplicitMarker("s");
-		assert.deepEqual(contents(out.messages).filter(content => content !== "S" && !/^(h|a\d+)$/.test(content)), [`V${i}`], "only the current counters are on the wire");
-		assert.equal(contents(out.messages).at(-1), `V${i}`);
-		if (previous) assert.deepEqual(out.messages.slice(0, previous.length - 1), previous.slice(0, -1), `request ${i} broke the cached prefix`);
-		assert.deepEqual(retention.contents("s"), ["S", `V${i}`], "relocation skips the retained policy and the request-only counters");
-		previous = out.messages;
+		assert.deepEqual(out.messages.slice(0, base.length), base, `request ${i} put a live block inside cached history`);
+		assert.deepEqual(contents(out.messages.slice(base.length)), [fresh.state, fresh.tasks, fresh.counters]);
+		assert.deepEqual(retention.contents("s"), [fresh.state, fresh.tasks, fresh.counters], "relocation skips the whole request-only tail");
 		base.push(msg("assistant", `a${i}`, i + 2));
 	}
 });
 
-test("request-only counters repeat on an unchanged retry", () => {
+test("request-only blocks repeat on an unchanged retry", () => {
 	const retention = new LiveTailRetention();
 	const base = [msg("user", "h", 1)];
-	const first = retention.apply("s", base, { state: "S", counters: "V" });
+	const first = retention.apply("s", base, { state: "S", tasks: "T", counters: "V" });
 	retention.noteExplicitMarker("s");
-	const retry = retention.apply("s", base, { state: "S", counters: "V" });
-	assert.deepEqual(retry.messages, first.messages, "no retained copy exists, so the retry must carry the counters again");
-	assert.deepEqual(retry.transientContents, ["S", "V"]);
+	const retry = retention.apply("s", base, { state: "S", tasks: "T", counters: "V" });
+	assert.deepEqual(retry.messages, first.messages, "no retained copy exists, so the retry must carry the tail again");
+	assert.deepEqual(retry.transientContents, ["S", "T", "V"]);
 });
 
-test("task snapshots stay retained in place while counters are request-only", () => {
+test("a policy change under explicit markers leaves history untouched", () => {
 	const retention = new LiveTailRetention();
-	const base1 = [msg("user", "h", 1)];
-	const first = retention.apply("s", base1, { state: "S", tasks: "T1", counters: "V1" });
+	const base: any[] = [msg("user", "h", 1)];
+	retention.apply("s", base, { state: "active", tasks: "T", counters: "V1" });
 	retention.noteExplicitMarker("s");
-	const base2 = [...base1, msg("assistant", "a", 2)];
-	const second = retention.apply("s", base2, { state: "S", tasks: "T2", counters: "V2" });
-	assert.deepEqual(contents(second.messages), ["h", "S", "T1", "a", "T2", "V2"]);
-	assert.deepEqual(second.messages.slice(0, 3), first.messages.slice(0, 3));
-	assert.deepEqual(retention.contents("s"), ["S", "T1", "T2", "V2"]);
+	base.push(msg("assistant", "a", 2));
+	const paused = retention.apply("s", base, { state: "paused" });
+	assert.deepEqual(contents(paused.messages), ["h", "a", "paused"]);
+	base.push(msg("user", "resume", 3));
+	const resumed = retention.apply("s", base, { state: "active", tasks: "T", counters: "V2" });
+	assert.deepEqual(contents(resumed.messages), ["h", "a", "resume", "active", "T", "V2"], "no stale policy, no mid-history tail");
 });
 
-test("a session that starts sending markers late keeps earlier counters in place", () => {
+test("a session that starts sending markers late keeps earlier tails in place until a reset", () => {
 	const retention = new LiveTailRetention();
 	const base: any[] = [msg("user", "h", 1)];
 	retention.apply("s", base, { state: "S", counters: "V1" });
@@ -308,19 +308,22 @@ test("a session that starts sending markers late keeps earlier counters in place
 	retention.noteExplicitMarker("s");
 	base.push(msg("assistant", "b", 3));
 	const third = retention.apply("s", base, { state: "S", counters: "V3" });
-	// Removing V1 would itself break the prefix; only the just-sent V2 is dropped.
+	// Removing S or V1 would itself break the prefix; only the just-sent V2 is dropped,
+	// and the policy still current at its anchor is not repeated.
 	assert.deepEqual(contents(third.messages), ["h", "S", "V1", "a", "b", "V3"]);
 	assert.deepEqual(third.messages.slice(0, second.messages.length - 1), second.messages.slice(0, -1));
+	const changed = retention.apply("s", base, { state: "S2", counters: "V4" });
+	assert.deepEqual(contents(changed.messages), ["h", "a", "b", "S2", "V4"], "the reset clears the old tails; nothing is retained again");
 });
 
-test("dropping request-only counters does not reset the retained policy", () => {
+test("dropping request-only blocks needs no reset", () => {
 	const retention = new LiveTailRetention();
 	const base: any[] = [msg("user", "h", 1)];
-	retention.apply("s", base, { state: "S", counters: "V" });
+	retention.apply("s", base, { state: "S", tasks: "T", counters: "V" });
 	retention.noteExplicitMarker("s");
 	base.push(msg("assistant", "a", 2));
 	const next = retention.apply("s", base, { state: "S" });
-	assert.deepEqual(contents(next.messages), ["h", "S", "a"], "the policy keeps its anchor; no stale counters linger");
+	assert.deepEqual(contents(next.messages), ["h", "a", "S"], "no stale task snapshot or counters linger");
 	assert.deepEqual(retention.contents("s"), ["S"]);
 });
 

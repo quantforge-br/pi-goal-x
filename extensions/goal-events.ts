@@ -81,8 +81,8 @@ export function registerGoalEvents(core: GoalCore): void {
    if (session && ctx && ctx.sessionManager !== session.manager) return;
    const sessionKey = sessionKeyFor(ctx);
    const relocated = cacheGoalHistory(event.payload, liveRetention.contents(sessionKey));
-   // A relocated marker proves explicit caching: counters go request-only so
-   // they stop filling the retention window and forcing prefix-breaking resets.
+   // A relocated marker proves explicit caching: the live tail goes
+   // request-only, so no reset ever removes a block from cached history.
    if (relocated !== undefined) liveRetention.noteExplicitMarker(sessionKey);
    return relocated;
   }

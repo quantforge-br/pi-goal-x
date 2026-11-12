@@ -27,12 +27,15 @@ import { asRecord } from "./goal-record.ts";
  * the prefix instead of resetting it; only the policy block forces a reset.
  *
  * Explicit-marker providers (Anthropic cache_control, Bedrock cachePoint) need
- * no retained counters: marker relocation already keeps the breakpoint on real
- * history, ahead of the live tail. Retaining a counter that changes on every
- * request would only fill the retention window and force a full reset — a
- * mid-history prefix break — every MAX_RETAINED_LIVE_TAILS requests. Once a
- * payload proves the session uses explicit markers, counters ride request-only
- * at the tail and are never replayed.
+ * no retention at all: marker relocation already keeps the breakpoint on real
+ * history, ahead of the live tail, so a tail that is sent once and never
+ * replayed costs no cached prefix. Retention only hurts there, because every
+ * reset removes tails from mid-history and the provider re-writes everything
+ * after the oldest one: counters that change on every request overflowed the
+ * window about every 30 requests, and each pause, resume or other policy
+ * change reset it again. Once a payload proves the session uses explicit
+ * markers, policy, task snapshot and counters all ride request-only after the
+ * breakpoint, at the price of billing that tail as uncached input per request.
  */
 
 export const LIVE_CONTEXT_TYPE = "pi-goal-live-context";
@@ -89,8 +92,8 @@ interface SessionRetention {
 	baseFingerprints: Array<string | null>;
 	/** A provider payload carried an explicit cache marker on our live tail. */
 	explicitMarkers: boolean;
-	/** Counters sent with the latest request only; never replayed mid-history. */
-	requestOnlyCounters: string | undefined;
+	/** Live blocks sent with the latest request only; never replayed mid-history. */
+	requestOnly: string[];
 }
 
 function freshBlocks(fresh: FreshLiveTails): LiveBlock[] {
@@ -162,7 +165,7 @@ export class LiveTailRetention {
 		const fingerprints = base.map(fingerprintMessage);
 		let session = this.sessions.get(sessionKey);
 		if (!session) {
-			session = { tails: [], lastFresh: undefined, baseFingerprints: [], explicitMarkers: false, requestOnlyCounters: undefined };
+			session = { tails: [], lastFresh: undefined, baseFingerprints: [], explicitMarkers: false, requestOnly: [] };
 			if (this.sessions.size >= MAX_TRACKED_SESSIONS) {
 				const oldest = this.sessions.keys().next();
 				if (!oldest.done) this.sessions.delete(oldest.value);
@@ -178,11 +181,11 @@ export class LiveTailRetention {
 		// fresh rather than leave a stale objective or a cancelled scheduling
 		// instruction lingering mid-history. A dropped task snapshot or counter
 		// block resets too, so its last copy never reads as the current one.
-		// Request-only counters leave no retained copy, so dropping them is free.
+		// A request-only block leaves no retained copy, so dropping it is free.
+		const retained = (kind: LiveTailKind) => session!.tails.some(tail => tail.kind === kind);
 		if (session.lastFresh !== undefined && (session.lastFresh.state !== fresh.state
-			|| (session.lastFresh.tasks !== undefined && !fresh.tasks)
-			|| (session.lastFresh.counters !== undefined && fresh.counters === undefined
-				&& session.tails.some(tail => tail.kind === "goal-counters")))) reset();
+			|| (session.lastFresh.tasks !== undefined && !fresh.tasks && retained("goal-tasks"))
+			|| (session.lastFresh.counters !== undefined && fresh.counters === undefined && retained("goal-counters")))) reset();
 		// Tails anchored while history was empty would linger at the head once
 		// real history arrives. Reset once so fresh tails anchor at the tail.
 		if (session.tails.length > 0 && session.baseFingerprints.length === 0 && base.length > 0) reset();
@@ -214,10 +217,10 @@ export class LiveTailRetention {
 		}
 		if (valid < session.tails.length) reset();
 		const blocks = freshBlocks(fresh);
-		// Explicit-marker sessions keep counters out of retention entirely: the
-		// relocated breakpoint sits ahead of the live tail, so a request-only
-		// counter never enters a cached prefix and never needs a replay.
-		const retainable = session.explicitMarkers ? blocks.filter(block => block.kind !== "goal-counters") : blocks;
+		// Explicit-marker sessions retain nothing new: the relocated breakpoint
+		// sits ahead of the live tail, so a request-only block never enters a
+		// cached prefix and never needs a replay.
+		const retainable = session.explicitMarkers ? [] : blocks;
 		// Append only blocks that differ from the last emitted block of the same
 		// kind, so unchanged content across repeats, tool loops, and history
 		// advances adds zero blocks while keeping the prefix literal. The state
@@ -241,10 +244,15 @@ export class LiveTailRetention {
 			messages.push(makeLiveMessage(block.content));
 			session.tails.push({ anchorIndex: base.length, anchorFingerprint: fingerprints.at(-1) ?? null, content: block.content, kind: block.kind });
 		}
-		// Request-only counters are sent on every request, changed or not: no
-		// earlier copy survives in history to stand in for them.
-		session.requestOnlyCounters = session.explicitMarkers ? fresh.counters : undefined;
-		if (session.requestOnlyCounters !== undefined) messages.push(makeLiveMessage(session.requestOnlyCounters));
+		// Request-only blocks are sent on every request, changed or not: no
+		// earlier copy survives in history to stand in for them. A block still
+		// current at a retained anchor (tails kept from before the first marker)
+		// is already on the wire and is not repeated.
+		const current = new Map(session.tails.map(tail => [tail.kind, tail.content]));
+		session.requestOnly = session.explicitMarkers
+			? blocks.filter(block => current.get(block.kind) !== block.content).map(block => block.content)
+			: [];
+		for (const content of session.requestOnly) messages.push(makeLiveMessage(content));
 		session.baseFingerprints = fingerprints;
 		session.lastFresh = { state: fresh.state, tasks: fresh.tasks || undefined, counters: fresh.counters };
 		return { messages, transientContents: [...new Set([...session.tails.map(tail => tail.content), ...blocks.map(block => block.content)])] };
@@ -253,32 +261,29 @@ export class LiveTailRetention {
 	/**
 	 * Record that the request just built for this session carried an explicit
 	 * cache marker on its live tail (the marker relocation moved it). From here
-	 * on the session's counters are request-only.
+	 * on the session's live blocks are request-only.
 	 *
-	 * The counters appended by that same request still sit in `tails`. They are
-	 * the last block of a payload whose breakpoint was just moved ahead of every
-	 * live block, so no cached prefix contains them and dropping them from the
-	 * replay set is free. Counters retained at earlier anchors (a session that
-	 * only later starts sending markers) stay in place until the next reset:
-	 * removing them would itself break the prefix.
+	 * The blocks that same request appended still sit in `tails`, anchored at
+	 * the end of its history. The breakpoint was just moved ahead of every live
+	 * block there, so no cached prefix contains them and dropping them from the
+	 * replay set is free. Tails at earlier anchors (a session that only later
+	 * starts sending markers) stay in place until the next reset: removing them
+	 * would itself break the prefix.
 	 */
 	noteExplicitMarker(sessionKey: string): void {
 		const session = this.sessions.get(sessionKey);
 		if (!session || session.explicitMarkers) return;
 		session.explicitMarkers = true;
-		const newest = session.tails.at(-1);
-		if (newest?.kind !== "goal-counters" || newest.anchorIndex !== session.baseFingerprints.length) return;
-		session.tails.pop();
-		session.requestOnlyCounters = newest.content;
+		const tailAnchor = session.baseFingerprints.length;
+		session.requestOnly = session.tails.filter(tail => tail.anchorIndex === tailAnchor).map(tail => tail.content);
+		session.tails = session.tails.filter(tail => tail.anchorIndex !== tailAnchor);
 	}
 
-	/** Every live text of the latest request: retained tails plus request-only counters. */
+	/** Every live text of the latest request: retained tails plus request-only blocks. */
 	contents(sessionKey: string): string[] | undefined {
 		const session = this.sessions.get(sessionKey);
 		if (!session) return undefined;
-		const contents = session.tails.map(tail => tail.content);
-		if (session.requestOnlyCounters !== undefined) contents.push(session.requestOnlyCounters);
-		return contents;
+		return [...session.tails.map(tail => tail.content), ...session.requestOnly];
 	}
 
 	clear(sessionKey?: string): void {

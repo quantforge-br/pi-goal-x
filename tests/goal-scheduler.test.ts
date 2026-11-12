@@ -811,16 +811,15 @@ test("prompt cache: normal and custom runs preserve history while refreshing all
  const toolResult = {role: "toolResult", toolCallId: "call-1", toolName: "read", content: [{type: "text", text: "file contents"}], isError: false, timestamp: 3};
  history.push(toolCall, toolResult);
  const second = await request();
- // The wire above carried an explicit marker, so counters are request-only:
- // the superseded snapshot sat after the relocated breakpoint and is not replayed.
- assert.deepEqual(second.slice(0, 2), first.slice(0, 2), "cached history and the retained policy block stay a literal prefix");
- assert.deepEqual(second.slice(2, 4), [toolCall, toolResult], "tool call and result stay adjacent");
- assert.match(second[1].content, /PI GOAL ACTIVE/);
- assert.equal(second.filter((m: any) => m.customType === "pi-goal-live-context").length, 2, "the policy block is retained, not resent; only the current counters ride at the tail");
+ // The wire above carried an explicit marker, so the live tail is request-only:
+ // the blocks sent before sat after the relocated breakpoint and are not replayed.
+ assert.deepEqual(second.slice(0, 3), history, "real history is untouched: no live block sits inside the cached prefix");
+ assert.match(second.at(-2).content, /PI GOAL ACTIVE/);
+ assert.equal(second.filter((m: any) => m.customType === "pi-goal-live-context").length, 2, "policy and current counters ride at the tail, once");
  assert.match(second.at(-1).content, /12345 tokens/);
  assert.doesNotMatch(second.at(-1).content, /Autonomous runs/, "an unlimited allowance reports no runs line");
- // An objective edit changes the stable policy block: retention resets once so no
- // stale objective lingers mid-history, and the fresh pair anchors the new prefix.
+ // An objective edit changes the policy block: no stale objective lingers
+ // anywhere, and the fresh pair rides at the tail.
  h.core.state.goal!.objective = "Changed objective";
  const third = await request();
  assert.equal(third.filter((m: any) => m.customType === "pi-goal-live-context").length, 2);
@@ -831,8 +830,9 @@ test("prompt cache: normal and custom runs preserve history while refreshing all
  for (let i = 0; i < 4; i++) {
   history.push({role: "custom", customType: "pi-goal-event", content: "legacy full prompt", details: {goalId: h.core.state.goal!.id, kind: "checkpoint"}, timestamp: i + 4});
   const current = await request();
-  assert.deepEqual(current.slice(0, third.length - 1), third.slice(0, -1));
-  assert.equal(current.filter((m: any) => m.customType === "pi-goal-live-context").length, 2, "retained tails are re-sent in place, never duplicated per request");
+  assert.deepEqual(current.slice(0, 3), history.slice(0, 3));
+  assert.equal(current.filter((m: any) => m.customType === "pi-goal-live-context").length, 2, "the tail is sent once per request, never duplicated");
+  assert.match(current.at(-2).content, /Changed objective/);
   const before = current.slice(0, -1);
   const again = await request();
   assert.deepEqual(again.slice(0, -1), before);
@@ -846,28 +846,35 @@ test("prompt cache: normal and custom runs preserve history while refreshing all
  }
 });
 
-// Counters change on every request. Retaining them filled the 32-tail window
-// and forced a full reset — a mid-history prefix break that re-wrote the whole
-// cached conversation — roughly every 30 requests of an Anthropic session.
-test("prompt cache: explicit-marker sessions never reset on changing counters", async t => {
+// Retained tails made explicit-cache providers re-write cached history: counters
+// change on every request and overflowed the 32-tail window about every 30
+// requests, and each pause or resume reset retention again. With an explicit
+// marker the whole live tail is request-only, so history is never touched.
+test("prompt cache: explicit-marker sessions never put live goal state inside cached history", async t => {
  const h = await fixture(t);
  const history: any[] = [{role: "user", content: "Work on the goal", timestamp: 1}];
  const isLive = (m: any) => m.customType === "pi-goal-live-context";
- let previous: any[] | null = null;
  for (let n = 0; n < MAX_RETAINED_LIVE_TAILS * 3; n++) {
   h.core.state.goal!.usage.tokensUsed = 1000 + n;
+  // Pause on every tenth request and resume on the next one.
+  const paused = n % 10 === 9;
+  h.core.state.goal!.status = paused ? "paused" : "active";
   const messages: any[] = (await h.handlers.context_with_system!({messages: history}, h.ctx)).messages;
-  assert.match(messages.at(-1).content, new RegExp(`${1000 + n} tokens`), "the current counters ride at the tail");
-  assert.equal(messages.filter(isLive).length, 2, "one retained policy block plus the request-only counters");
-  // Everything ahead of the trailing counters is what the relocated breakpoint caches.
-  if (previous) assert.deepEqual(messages.slice(0, previous.length - 1), previous.slice(0, -1), `request ${n} broke the cached prefix`);
+  assert.deepEqual(messages.slice(0, history.length), history, `request ${n} put a live block inside cached history`);
+  const tail = messages.slice(history.length);
+  assert.ok(tail.every(isLive));
+  if (paused) assert.match(tail.map(m => m.content).join("\n"), /PI GOAL PAUSED/);
+  else {
+   assert.equal(tail.length, 2, "current policy plus current counters, once each");
+   assert.match(tail[0].content, /PI GOAL ACTIVE/);
+   assert.match(tail[1].content, new RegExp(`${1000 + n} tokens`));
+  }
   const wire: any = {messages: messages.map(m => ({role: m.role === "assistant" ? "assistant" : "user", content: [{type: "text", text: typeof m.content === "string" ? m.content : m.content[0].text}]}))};
   wire.messages.at(-1).content[0].cache_control = {type: "ephemeral"};
   await h.handlers.before_provider_request!({payload: wire}, h.ctx);
   const marked = wire.messages.filter((m: any) => m.content[0].cache_control);
   assert.equal(marked.length, 1, "marker count is unchanged");
-  assert.equal(marked[0], wire.messages[n === 0 ? 0 : wire.messages.length - 2], "the breakpoint lands on the newest real history block");
-  previous = messages;
+  assert.equal(marked[0], wire.messages[history.length - 1], "the breakpoint lands on the newest real history block");
   history.push({role: "assistant", content: [{type: "text", text: `step ${n}`}], timestamp: n + 2});
  }
 });

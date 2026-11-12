@@ -234,13 +234,14 @@ for (const flavor of ["anthropic-messages", "anthropic-compatible-completions"] 
  });
 }
 
-// Counter-churn regression through the registered hooks and Pi's serializers.
+// Live-tail regression through the registered hooks and Pi's serializers.
 // Counters change on every request; retaining them used to overflow the
 // retention window and reset it, rewriting the cached conversation about every
-// 30 requests. Everything up to the explicit breakpoint of request N must
-// reappear byte-identically at the head of request N+1.
+// 30 requests, and each pause or resume reset it again. Everything up to the
+// explicit breakpoint of request N must reappear byte-identically at the head
+// of request N+1, through counter churn and policy changes alike.
 for (const flavor of ["anthropic-messages", "anthropic-compatible-completions"] as const) {
- test(`real ${flavor} hook chain keeps the cached prefix through counter churn`, async () => {
+ test(`real ${flavor} hook chain keeps the cached prefix through counter churn and pause/resume`, async () => {
   const work = mkdtempSync(path.join(tmpdir(), "goal-cache-churn-"));
   const h = stabilizationHarness();
   try {
@@ -255,6 +256,9 @@ for (const flavor of ["anthropic-messages", "anthropic-compatible-completions"] 
    let cached: string[] | null = null;
    for (let n = 0; n < 80; n++) {
     h.core.state.goal!.usage.tokensUsed = 1000 + n;
+    // Pause on every tenth request and resume on the next one.
+    const paused = n % 10 === 9;
+    h.core.state.goal!.status = paused ? "paused" : "active";
     const {messages} = await h.event("context_with_system", {messages: session});
     let payload: any;
     await runtime.streamSimple(model, {systemPrompt: "stable host", messages: convertToLlm(messages)}, {cacheRetention: "short", sessionId: "churn-session", onPayload: value => {
@@ -267,9 +271,13 @@ for (const flavor of ["anthropic-messages", "anthropic-compatible-completions"] 
      .flatMap((m: any) => (Array.isArray(m.content) ? m.content : [{type: "text", text: m.content}]).map((block: any) => ({role: m.role, block})));
     const marker = flat.findLastIndex((entry: any) => entry.block.cache_control);
     assert.ok(marker >= 0, "the payload keeps its explicit breakpoint");
-    assert.doesNotMatch(JSON.stringify(flat[marker]), /Goal snapshot:/, "volatile counters never own the breakpoint");
-    assert.equal(JSON.stringify(flat).split("Goal snapshot:").length - 1, 1, "only the current counters are sent");
-    assert.match(JSON.stringify(flat.at(-1)), new RegExp(`${1000 + n} tokens`));
+    assert.doesNotMatch(JSON.stringify(flat[marker]), /Goal snapshot:|PI GOAL/, "live goal state never owns the breakpoint");
+    const wire = JSON.stringify(flat);
+    const count = (text: string) => wire.split(text).length - 1;
+    assert.equal(count("PI GOAL ACTIVE"), paused ? 0 : 1, "only the current policy is sent");
+    assert.equal(count("PI GOAL PAUSED"), paused ? 1 : 0, "no stale pause notice lingers");
+    assert.equal(count("Goal snapshot:"), paused ? 0 : 1, "only the current counters are sent");
+    if (!paused) assert.match(JSON.stringify(flat.at(-1)), new RegExp(`${1000 + n} tokens`));
     const serialized = flat.map(({role, block}: any) => { const {cache_control: _marker, ...rest} = block; return JSON.stringify([role, rest]); });
     if (cached) assert.deepEqual(serialized.slice(0, cached.length), cached, `request ${n} rewrote the cached prefix`);
     cached = serialized.slice(0, marker + 1);
