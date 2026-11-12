@@ -79,7 +79,12 @@ export function registerGoalEvents(core: GoalCore): void {
   if (ctx && contexts.has(ctx) && contexts.get(ctx) !== session) return;
   try {
    if (session && ctx && ctx.sessionManager !== session.manager) return;
-   return cacheGoalHistory(event.payload, liveRetention.contents(sessionKeyFor(ctx)));
+   const sessionKey = sessionKeyFor(ctx);
+   const relocated = cacheGoalHistory(event.payload, liveRetention.contents(sessionKey));
+   // A relocated marker proves explicit caching: counters go request-only so
+   // they stop filling the retention window and forcing prefix-breaking resets.
+   if (relocated !== undefined) liveRetention.noteExplicitMarker(sessionKey);
+   return relocated;
   }
   catch (error) { if (!isStaleExtensionContextError(error)) throw error; }
  });

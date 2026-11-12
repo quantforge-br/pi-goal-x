@@ -25,6 +25,14 @@ import { asRecord } from "./goal-record.ts";
  * Task snapshots and usage counters are separate tail kinds. Each is appended
  * only when it differs from its previous emission, so task progress extends
  * the prefix instead of resetting it; only the policy block forces a reset.
+ *
+ * Explicit-marker providers (Anthropic cache_control, Bedrock cachePoint) need
+ * no retained counters: marker relocation already keeps the breakpoint on real
+ * history, ahead of the live tail. Retaining a counter that changes on every
+ * request would only fill the retention window and force a full reset — a
+ * mid-history prefix break — every MAX_RETAINED_LIVE_TAILS requests. Once a
+ * payload proves the session uses explicit markers, counters ride request-only
+ * at the tail and are never replayed.
  */
 
 export const LIVE_CONTEXT_TYPE = "pi-goal-live-context";
@@ -79,6 +87,10 @@ interface SessionRetention {
 	lastFresh: FreshLiveTails | undefined;
 	/** Digest of every base message at the last apply; any earlier rewrite resets. */
 	baseFingerprints: Array<string | null>;
+	/** A provider payload carried an explicit cache marker on our live tail. */
+	explicitMarkers: boolean;
+	/** Counters sent with the latest request only; never replayed mid-history. */
+	requestOnlyCounters: string | undefined;
 }
 
 function freshBlocks(fresh: FreshLiveTails): LiveBlock[] {
@@ -150,7 +162,7 @@ export class LiveTailRetention {
 		const fingerprints = base.map(fingerprintMessage);
 		let session = this.sessions.get(sessionKey);
 		if (!session) {
-			session = { tails: [], lastFresh: undefined, baseFingerprints: [] };
+			session = { tails: [], lastFresh: undefined, baseFingerprints: [], explicitMarkers: false, requestOnlyCounters: undefined };
 			if (this.sessions.size >= MAX_TRACKED_SESSIONS) {
 				const oldest = this.sessions.keys().next();
 				if (!oldest.done) this.sessions.delete(oldest.value);
@@ -166,9 +178,11 @@ export class LiveTailRetention {
 		// fresh rather than leave a stale objective or a cancelled scheduling
 		// instruction lingering mid-history. A dropped task snapshot or counter
 		// block resets too, so its last copy never reads as the current one.
+		// Request-only counters leave no retained copy, so dropping them is free.
 		if (session.lastFresh !== undefined && (session.lastFresh.state !== fresh.state
 			|| (session.lastFresh.tasks !== undefined && !fresh.tasks)
-			|| (session.lastFresh.counters !== undefined && fresh.counters === undefined))) reset();
+			|| (session.lastFresh.counters !== undefined && fresh.counters === undefined
+				&& session.tails.some(tail => tail.kind === "goal-counters")))) reset();
 		// Tails anchored while history was empty would linger at the head once
 		// real history arrives. Reset once so fresh tails anchor at the tail.
 		if (session.tails.length > 0 && session.baseFingerprints.length === 0 && base.length > 0) reset();
@@ -200,19 +214,23 @@ export class LiveTailRetention {
 		}
 		if (valid < session.tails.length) reset();
 		const blocks = freshBlocks(fresh);
+		// Explicit-marker sessions keep counters out of retention entirely: the
+		// relocated breakpoint sits ahead of the live tail, so a request-only
+		// counter never enters a cached prefix and never needs a replay.
+		const retainable = session.explicitMarkers ? blocks.filter(block => block.kind !== "goal-counters") : blocks;
 		// Append only blocks that differ from the last emitted block of the same
 		// kind, so unchanged content across repeats, tool loops, and history
 		// advances adds zero blocks while keeping the prefix literal. The state
 		// block never differs here: a changed state already reset above.
 		const previous = session.lastFresh === undefined ? [] : freshBlocks(session.lastFresh);
-		let appended = blocks.filter(block => !previous.some(prior => prior.kind === block.kind && prior.content === block.content));
+		let appended = retainable.filter(block => !previous.some(prior => prior.kind === block.kind && prior.content === block.content));
 		// Overflow is measured against what this request actually appends: an
 		// unchanged request adds nothing and must never trigger a reset.
 		if (session.tails.length + appended.length > MAX_RETAINED_LIVE_TAILS
 			|| kindBytes(session.tails, "goal-counters") + kindBytes(appended, "goal-counters") > MAX_RETAINED_COUNTER_BYTES
 			|| kindBytes(session.tails, "goal-tasks") + kindBytes(appended, "goal-tasks") > MAX_RETAINED_TASK_BYTES) {
 			reset();
-			appended = blocks;
+			appended = retainable;
 		}
 		const messages: Array<T | LiveMessage> = [...base];
 		for (let i = session.tails.length - 1; i >= 0; i--) {
@@ -223,13 +241,44 @@ export class LiveTailRetention {
 			messages.push(makeLiveMessage(block.content));
 			session.tails.push({ anchorIndex: base.length, anchorFingerprint: fingerprints.at(-1) ?? null, content: block.content, kind: block.kind });
 		}
+		// Request-only counters are sent on every request, changed or not: no
+		// earlier copy survives in history to stand in for them.
+		session.requestOnlyCounters = session.explicitMarkers ? fresh.counters : undefined;
+		if (session.requestOnlyCounters !== undefined) messages.push(makeLiveMessage(session.requestOnlyCounters));
 		session.baseFingerprints = fingerprints;
 		session.lastFresh = { state: fresh.state, tasks: fresh.tasks || undefined, counters: fresh.counters };
 		return { messages, transientContents: [...new Set([...session.tails.map(tail => tail.content), ...blocks.map(block => block.content)])] };
 	}
 
+	/**
+	 * Record that the request just built for this session carried an explicit
+	 * cache marker on its live tail (the marker relocation moved it). From here
+	 * on the session's counters are request-only.
+	 *
+	 * The counters appended by that same request still sit in `tails`. They are
+	 * the last block of a payload whose breakpoint was just moved ahead of every
+	 * live block, so no cached prefix contains them and dropping them from the
+	 * replay set is free. Counters retained at earlier anchors (a session that
+	 * only later starts sending markers) stay in place until the next reset:
+	 * removing them would itself break the prefix.
+	 */
+	noteExplicitMarker(sessionKey: string): void {
+		const session = this.sessions.get(sessionKey);
+		if (!session || session.explicitMarkers) return;
+		session.explicitMarkers = true;
+		const newest = session.tails.at(-1);
+		if (newest?.kind !== "goal-counters" || newest.anchorIndex !== session.baseFingerprints.length) return;
+		session.tails.pop();
+		session.requestOnlyCounters = newest.content;
+	}
+
+	/** Every live text of the latest request: retained tails plus request-only counters. */
 	contents(sessionKey: string): string[] | undefined {
-		return this.sessions.get(sessionKey)?.tails.map(tail => tail.content);
+		const session = this.sessions.get(sessionKey);
+		if (!session) return undefined;
+		const contents = session.tails.map(tail => tail.content);
+		if (session.requestOnlyCounters !== undefined) contents.push(session.requestOnlyCounters);
+		return contents;
 	}
 
 	clear(sessionKey?: string): void {

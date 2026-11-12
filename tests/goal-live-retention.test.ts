@@ -255,3 +255,84 @@ test("retained task snapshots are bounded by their own byte budget with one rese
 	assert.equal(breaks, 1);
 	assert.equal(contents(previous!).filter(content => content === "S").length, 1, "a reset replays the policy once");
 });
+
+// Explicit-marker sessions (Anthropic cache_control, Bedrock cachePoint): the
+// relocated breakpoint sits ahead of the live tail, so everything before the
+// trailing counters is the cacheable prefix and must survive every request.
+test("explicit-marker sessions keep counters request-only and never reset on counter churn", () => {
+	const retention = new LiveTailRetention();
+	const base: any[] = [msg("user", "h", 1)];
+	let previous: any[] | null = null;
+	for (let i = 0; i < 1000; i++) {
+		const out = retention.apply("s", base, { state: "S", counters: `V${i}` });
+		// The provider hook reports the relocated marker after every request.
+		retention.noteExplicitMarker("s");
+		assert.deepEqual(contents(out.messages).filter(content => content !== "S" && !/^(h|a\d+)$/.test(content)), [`V${i}`], "only the current counters are on the wire");
+		assert.equal(contents(out.messages).at(-1), `V${i}`);
+		if (previous) assert.deepEqual(out.messages.slice(0, previous.length - 1), previous.slice(0, -1), `request ${i} broke the cached prefix`);
+		assert.deepEqual(retention.contents("s"), ["S", `V${i}`], "relocation skips the retained policy and the request-only counters");
+		previous = out.messages;
+		base.push(msg("assistant", `a${i}`, i + 2));
+	}
+});
+
+test("request-only counters repeat on an unchanged retry", () => {
+	const retention = new LiveTailRetention();
+	const base = [msg("user", "h", 1)];
+	const first = retention.apply("s", base, { state: "S", counters: "V" });
+	retention.noteExplicitMarker("s");
+	const retry = retention.apply("s", base, { state: "S", counters: "V" });
+	assert.deepEqual(retry.messages, first.messages, "no retained copy exists, so the retry must carry the counters again");
+	assert.deepEqual(retry.transientContents, ["S", "V"]);
+});
+
+test("task snapshots stay retained in place while counters are request-only", () => {
+	const retention = new LiveTailRetention();
+	const base1 = [msg("user", "h", 1)];
+	const first = retention.apply("s", base1, { state: "S", tasks: "T1", counters: "V1" });
+	retention.noteExplicitMarker("s");
+	const base2 = [...base1, msg("assistant", "a", 2)];
+	const second = retention.apply("s", base2, { state: "S", tasks: "T2", counters: "V2" });
+	assert.deepEqual(contents(second.messages), ["h", "S", "T1", "a", "T2", "V2"]);
+	assert.deepEqual(second.messages.slice(0, 3), first.messages.slice(0, 3));
+	assert.deepEqual(retention.contents("s"), ["S", "T1", "T2", "V2"]);
+});
+
+test("a session that starts sending markers late keeps earlier counters in place", () => {
+	const retention = new LiveTailRetention();
+	const base: any[] = [msg("user", "h", 1)];
+	retention.apply("s", base, { state: "S", counters: "V1" });
+	base.push(msg("assistant", "a", 2));
+	const second = retention.apply("s", base, { state: "S", counters: "V2" });
+	assert.deepEqual(contents(second.messages), ["h", "S", "V1", "a", "V2"]);
+	retention.noteExplicitMarker("s");
+	base.push(msg("assistant", "b", 3));
+	const third = retention.apply("s", base, { state: "S", counters: "V3" });
+	// Removing V1 would itself break the prefix; only the just-sent V2 is dropped.
+	assert.deepEqual(contents(third.messages), ["h", "S", "V1", "a", "b", "V3"]);
+	assert.deepEqual(third.messages.slice(0, second.messages.length - 1), second.messages.slice(0, -1));
+});
+
+test("dropping request-only counters does not reset the retained policy", () => {
+	const retention = new LiveTailRetention();
+	const base: any[] = [msg("user", "h", 1)];
+	retention.apply("s", base, { state: "S", counters: "V" });
+	retention.noteExplicitMarker("s");
+	base.push(msg("assistant", "a", 2));
+	const next = retention.apply("s", base, { state: "S" });
+	assert.deepEqual(contents(next.messages), ["h", "S", "a"], "the policy keeps its anchor; no stale counters linger");
+	assert.deepEqual(retention.contents("s"), ["S"]);
+});
+
+test("clearing a session forgets its marker mode until a payload proves it again", () => {
+	const retention = new LiveTailRetention();
+	retention.noteExplicitMarker("unknown"); // No tracked session: a no-op.
+	const base: any[] = [msg("user", "h", 1)];
+	retention.apply("s", base, { state: "S", counters: "V1" });
+	retention.noteExplicitMarker("s");
+	retention.apply("s", base, null);
+	retention.apply("s", base, { state: "S", counters: "V1" });
+	base.push(msg("assistant", "a", 2));
+	const next = retention.apply("s", base, { state: "S", counters: "V2" });
+	assert.deepEqual(contents(next.messages), ["h", "S", "V1", "a", "V2"]);
+});

@@ -10,6 +10,7 @@ import { createGoal, goalFocusDetails, cloneGoal, normalizeGoalRecord } from "..
 import { writeActiveGoalFile, parseGoalFile } from "../extensions/storage/goal-files.ts";
 import { invalidateGoalSettingsCache, parseGoalSettings, saveGoalSettingsFileConfig, loadGoalSettings } from "../extensions/goal-settings.ts";
 import { newGoalScheduler, normalizeGoalScheduler, schedulerSummary } from "../extensions/goal-scheduler-state.ts";
+import { MAX_RETAINED_LIVE_TAILS } from "../extensions/goal-live-retention.ts";
 
 async function fixture(t: TestContext, limit?: number, owner = "owner", existing?: string, strict = true, idleBackoff = false) {
 	const cwd = existing ?? mkdtempSync(path.join(tmpdir(), "goal-scheduler-"));
@@ -810,10 +811,12 @@ test("prompt cache: normal and custom runs preserve history while refreshing all
  const toolResult = {role: "toolResult", toolCallId: "call-1", toolName: "read", content: [{type: "text", text: "file contents"}], isError: false, timestamp: 3};
  history.push(toolCall, toolResult);
  const second = await request();
- assert.deepEqual(second.slice(0, first.length), first, "the advanced request literally extends the previous one");
- assert.deepEqual(second.slice(3, 5), [toolCall, toolResult], "tool call and result stay adjacent");
+ // The wire above carried an explicit marker, so counters are request-only:
+ // the superseded snapshot sat after the relocated breakpoint and is not replayed.
+ assert.deepEqual(second.slice(0, 2), first.slice(0, 2), "cached history and the retained policy block stay a literal prefix");
+ assert.deepEqual(second.slice(2, 4), [toolCall, toolResult], "tool call and result stay adjacent");
  assert.match(second[1].content, /PI GOAL ACTIVE/);
- assert.equal(second.filter((m: any) => m.customType === "pi-goal-live-context").length, 3, "changed counters append one small tail; the policy block is retained, not resent");
+ assert.equal(second.filter((m: any) => m.customType === "pi-goal-live-context").length, 2, "the policy block is retained, not resent; only the current counters ride at the tail");
  assert.match(second.at(-1).content, /12345 tokens/);
  assert.doesNotMatch(second.at(-1).content, /Autonomous runs/, "an unlimited allowance reports no runs line");
  // An objective edit changes the stable policy block: retention resets once so no
@@ -841,6 +844,47 @@ test("prompt cache: normal and custom runs preserve history while refreshing all
   assert.match(stopped.at(-1).content, new RegExp(status.replace("_", " ").toUpperCase()));
   assert.doesNotMatch(stopped.at(-1).content, /PI GOAL ACTIVE/);
  }
+});
+
+// Counters change on every request. Retaining them filled the 32-tail window
+// and forced a full reset — a mid-history prefix break that re-wrote the whole
+// cached conversation — roughly every 30 requests of an Anthropic session.
+test("prompt cache: explicit-marker sessions never reset on changing counters", async t => {
+ const h = await fixture(t);
+ const history: any[] = [{role: "user", content: "Work on the goal", timestamp: 1}];
+ const isLive = (m: any) => m.customType === "pi-goal-live-context";
+ let previous: any[] | null = null;
+ for (let n = 0; n < MAX_RETAINED_LIVE_TAILS * 3; n++) {
+  h.core.state.goal!.usage.tokensUsed = 1000 + n;
+  const messages: any[] = (await h.handlers.context_with_system!({messages: history}, h.ctx)).messages;
+  assert.match(messages.at(-1).content, new RegExp(`${1000 + n} tokens`), "the current counters ride at the tail");
+  assert.equal(messages.filter(isLive).length, 2, "one retained policy block plus the request-only counters");
+  // Everything ahead of the trailing counters is what the relocated breakpoint caches.
+  if (previous) assert.deepEqual(messages.slice(0, previous.length - 1), previous.slice(0, -1), `request ${n} broke the cached prefix`);
+  const wire: any = {messages: messages.map(m => ({role: m.role === "assistant" ? "assistant" : "user", content: [{type: "text", text: typeof m.content === "string" ? m.content : m.content[0].text}]}))};
+  wire.messages.at(-1).content[0].cache_control = {type: "ephemeral"};
+  await h.handlers.before_provider_request!({payload: wire}, h.ctx);
+  const marked = wire.messages.filter((m: any) => m.content[0].cache_control);
+  assert.equal(marked.length, 1, "marker count is unchanged");
+  assert.equal(marked[0], wire.messages[n === 0 ? 0 : wire.messages.length - 2], "the breakpoint lands on the newest real history block");
+  previous = messages;
+  history.push({role: "assistant", content: [{type: "text", text: `step ${n}`}], timestamp: n + 2});
+ }
+});
+
+test("prompt cache: sessions without explicit markers keep retaining counters in place", async t => {
+ const h = await fixture(t);
+ const history: any[] = [{role: "user", content: "Work on the goal", timestamp: 1}];
+ const request = async () => (await h.handlers.context_with_system!({messages: history}, h.ctx)).messages as any[];
+ const first = await request();
+ const wire: any = {messages: first.map(m => ({role: "user", content: m.content}))};
+ assert.equal(await h.handlers.before_provider_request!({payload: wire}, h.ctx), undefined, "no marker, nothing to relocate");
+ h.core.state.goal!.usage.tokensUsed = 12345;
+ history.push({role: "assistant", content: [{type: "text", text: "progress"}], timestamp: 2});
+ const second = await request();
+ assert.deepEqual(second.slice(0, first.length), first, "the advanced request literally extends the previous one");
+ assert.equal(second.filter((m: any) => m.customType === "pi-goal-live-context").length, 3, "changed counters append one small tail");
+ assert.match(second.at(-1).content, /12345 tokens/);
 });
 
 test("prompt cache: interleaved sessions keep per-session transient sets", async t => {

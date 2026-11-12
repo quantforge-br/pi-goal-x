@@ -233,3 +233,49 @@ for (const flavor of ["anthropic-messages", "anthropic-compatible-completions"] 
   } finally { rmSync(cwd, {recursive: true, force: true}); }
  });
 }
+
+// Counter-churn regression through the registered hooks and Pi's serializers.
+// Counters change on every request; retaining them used to overflow the
+// retention window and reset it, rewriting the cached conversation about every
+// 30 requests. Everything up to the explicit breakpoint of request N must
+// reappear byte-identically at the head of request N+1.
+for (const flavor of ["anthropic-messages", "anthropic-compatible-completions"] as const) {
+ test(`real ${flavor} hook chain keeps the cached prefix through counter churn`, async () => {
+  const work = mkdtempSync(path.join(tmpdir(), "goal-cache-churn-"));
+  const h = stabilizationHarness();
+  try {
+   const runtime = await ModelRuntime.create({authPath: path.join(work, "auth.json"), modelsPath: null, allowModelNetwork: false, ...{ refreshOnCreate: false }});
+   const api = flavor === "anthropic-messages" ? flavor : "openai-completions";
+   runtime.registerProvider("churn-fixture", {baseUrl: "http://127.0.0.1:1", api, apiKey: "fixture-only", models: [{id: "fixture", name: "fixture", reasoning: false, input: ["text"], cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0}, contextWindow: 200000, maxTokens: 128}]});
+   const model = runtime.getModel("churn-fixture", "fixture")!;
+   if (api === "openai-completions") model.compat = {cacheControlFormat: "anthropic", supportsLongCacheRetention: true};
+   h.ctx.model = model;
+   await h.start();
+   const session: any[] = [{role: "user", content: "real history", timestamp: 1}];
+   let cached: string[] | null = null;
+   for (let n = 0; n < 80; n++) {
+    h.core.state.goal!.usage.tokensUsed = 1000 + n;
+    const {messages} = await h.event("context_with_system", {messages: session});
+    let payload: any;
+    await runtime.streamSimple(model, {systemPrompt: "stable host", messages: convertToLlm(messages)}, {cacheRetention: "short", sessionId: "churn-session", onPayload: value => {
+     payload = value;
+     h.event("before_provider_request", {payload});
+     throw new Error("Intentional capture before network dispatch");
+    }}).result();
+    assert.ok(payload);
+    const flat = payload.messages.filter((m: any) => m.role !== "system" && m.role !== "developer")
+     .flatMap((m: any) => (Array.isArray(m.content) ? m.content : [{type: "text", text: m.content}]).map((block: any) => ({role: m.role, block})));
+    const marker = flat.findLastIndex((entry: any) => entry.block.cache_control);
+    assert.ok(marker >= 0, "the payload keeps its explicit breakpoint");
+    assert.doesNotMatch(JSON.stringify(flat[marker]), /Goal snapshot:/, "volatile counters never own the breakpoint");
+    assert.equal(JSON.stringify(flat).split("Goal snapshot:").length - 1, 1, "only the current counters are sent");
+    assert.match(JSON.stringify(flat.at(-1)), new RegExp(`${1000 + n} tokens`));
+    const serialized = flat.map(({role, block}: any) => { const {cache_control: _marker, ...rest} = block; return JSON.stringify([role, rest]); });
+    if (cached) assert.deepEqual(serialized.slice(0, cached.length), cached, `request ${n} rewrote the cached prefix`);
+    cached = serialized.slice(0, marker + 1);
+    session.push({role: "assistant", content: [{type: "text", text: `result ${n}`}], api, provider: model.provider, model: model.id, stopReason: "stop", usage: {input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15}, timestamp: n * 2 + 2});
+    session.push({role: "user", content: `real history ${n + 2}`, timestamp: n * 2 + 3});
+   }
+  } finally { await h.cleanup(); rmSync(work, {recursive: true, force: true}); }
+ });
+}
