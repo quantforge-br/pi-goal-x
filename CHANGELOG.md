@@ -4,6 +4,8 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+## [0.35.2] — 2026-11-11
+
 ### Changed
 
 - Show `goal` instead of `pi-goal-x` as the brand in the dashboard box headers (compact, expanded and unfocused panels).
