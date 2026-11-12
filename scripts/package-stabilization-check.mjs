@@ -24,7 +24,9 @@ try {
   tarball=path.resolve(tarball);
   integrity=`sha512-${createHash('sha512').update(readFileSync(tarball)).digest('base64')}`;
  } else {
-  const [packed]=JSON.parse(run('npm',['pack','--json','--pack-destination',evidence],root));
+  // npm 12 keys the report by package name; earlier versions return an array.
+  const report=JSON.parse(run('npm',['pack','--json','--pack-destination',evidence],root));
+  const packed=Array.isArray(report)?report[0]:Object.values(report)[0];
   tarball=path.join(evidence,packed.filename);
   integrity=packed.integrity;
  }
