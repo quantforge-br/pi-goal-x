@@ -99,9 +99,13 @@ for (const fixtureId of expectedFixtureIds) {
 	if (captured.extensionSystem) failures.push(`${fixtureId}: goal state must not enter the system prefix`);
 	const liveState = captured.messages.filter(m => m.customType === "pi-goal-live-context");
 	const active = liveState[0]?.content?.includes("[PI GOAL ACTIVE goalId=");
-	const expectedTails = active ? 2 : 1;
-	if (liveState.length && (liveState.length !== expectedTails || liveState.some((m, i) => captured.messages.at(-expectedTails + i) !== m))) failures.push(`${fixtureId}: current policy and optional counters must occur once at the tail`);
-	if (active && !liveState[1]?.content?.startsWith("Goal snapshot:")) failures.push(`${fixtureId}: counters snapshot missing`);
+	// An active goal sends policy, then the task snapshot when a task list
+	// exists (its own tail since 0.35.1), then counters.
+	const hasTaskSnapshot = active && liveState.some(m => m.content?.startsWith("[TASK LIST"));
+	const expectedTails = active ? (hasTaskSnapshot ? 3 : 2) : 1;
+	if (liveState.length && (liveState.length !== expectedTails || liveState.some((m, i) => captured.messages.at(-expectedTails + i) !== m))) failures.push(`${fixtureId}: current policy, optional task snapshot and optional counters must occur once at the tail`);
+	if (hasTaskSnapshot && !liveState[1]?.content?.startsWith("[TASK LIST")) failures.push(`${fixtureId}: task snapshot must sit between policy and counters`);
+	if (active && !liveState.at(-1)?.content?.startsWith("Goal snapshot:")) failures.push(`${fixtureId}: counters snapshot missing`);
 	const liveText = liveState[0]?.content ?? "";
 
 	// Required single-source markers on active-goal fixtures whose turn was
