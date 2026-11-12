@@ -6,7 +6,6 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {ModelRuntime, convertToLlm} from '@earendil-works/pi-coding-agent';
-import {cacheGoalHistory} from '../../extensions/goal-prompt-cache.ts';
 import {LiveTailRetention} from '../../extensions/goal-live-retention.ts';
 import {BASE_SYSTEM, captureOne} from './capture-context.mjs';
 import {FIXTURES, userMessage, assistantMessage} from './fixtures.mjs';
@@ -27,12 +26,14 @@ export async function buildReport() {
    const model=runtime.getModel('cache-report','fixture');
    if(flavor==='anthropic-compatible-completions') model.compat={cacheControlFormat:'anthropic',supportsLongCacheRetention:true};
    for(const tier of ['none','short','long']) {
-    const serialize=async (id,captured,messages=captured.messages) => {
+    const serialize=async (id,captured,capture,messages=captured.messages) => {
      let payload;
      const transients=messages.filter(m=>m.customType==='pi-goal-live-context').map(m=>m.content);
      await runtime.streamSimple(model,{systemPrompt:captured.baseSystem+captured.extensionSystem,messages:convertToLlm(messages),tools:[...captured.hostTools,...captured.tools].map(t=>({name:t.name,description:t.description,parameters:t.schema}))},{sessionId:'cache-report-fixed-session',cacheRetention:tier,onPayload:value=>{
       payload=value;
-      cacheGoalHistory(payload,transients);
+      // The registered hook, as in production: it relocates the marker and
+      // tells retention that this session uses explicit markers.
+      capture.runProviderRequest(payload);
       throw new Error('Captured before dispatch');
      }}).result();
      assert.ok(payload,`${id}: missing provider payload`);
@@ -43,21 +44,21 @@ export async function buildReport() {
      if(samples.length<2) samples.push({id:row.id,payload:normalized});
      return row;
     };
-    for(const id of Object.keys(FIXTURES)) await captureOne(id,{inspect:async captured=>{await serialize(id,captured);}});
-    for(const value of [false,true]) await captureOne('active-regular-no-tasks',{settings:{showContextUsage:value},inspect:async captured=>{await serialize(`context-explicit-${value}`,captured);}});
+    for(const id of Object.keys(FIXTURES)) await captureOne(id,{inspect:async (captured,{capture})=>{await serialize(id,captured,capture);}});
+    for(const value of [false,true]) await captureOne('active-regular-no-tasks',{settings:{showContextUsage:value},inspect:async (captured,{capture})=>{await serialize(`context-explicit-${value}`,captured,capture);}});
     await captureOne('active-regular-no-tasks',{inspect:async (captured,{capture,baseMessages})=>{
      const base=[...baseMessages];
      let previous;
      for(let n=0;n<4;n++) {
       const messages=await capture.runContext(base);
-      const current=await serialize(`advance-${n}`,captured,messages);
+      const current=await serialize(`advance-${n}`,captured,capture,messages);
       if(previous) {
        const count=prefix(previous.blocks,current.blocks);
        // Explicit marker movement is covered separately; raw bytes stay recorded.
        current.reuse={blocks:count,bytes:previous.blocks.slice(0,count).reduce((s,b)=>s+b.bytes,0)};
        if(flavor.startsWith('openai')) assert.equal(count,previous.blocks.length,'unchanged-policy prefix lost');
       }
-      const retry=await serialize(`retry-${n}`,captured,await capture.runContext(base));
+      const retry=await serialize(`retry-${n}`,captured,capture,await capture.runContext(base));
       assert.deepEqual(retry.blocks,current.blocks,'identical retry changed');
       previous=current;
       base.push(assistantMessage(`progress ${n}`),userMessage(`continue ${n}`));
@@ -82,7 +83,10 @@ export async function buildReport() {
   let source='archived-release';
   try {source=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();} catch { /* Gate assigns the pinned archive SHA. */ }
   const lockfile=readFileSync(path.join(root,'package-lock.json'));
-  const locked=JSON.parse(lockfile);delete locked.version;delete locked.packages[''].version;
+  // The package's own name and version are identity, not dependencies: the
+  // fork publishes under a scoped name and must still compare with the pin.
+  const locked=JSON.parse(lockfile);
+  for(const identity of ['name','version']) {delete locked[identity];delete locked.packages[''][identity];}
   return {version:1,source,node:process.version,lockfile:digest(lockfile),dependencies:digest(locked),sdk:JSON.parse(readFileSync(path.join(root,'node_modules/@earendil-works/pi-coding-agent/package.json'),'utf8')).version,corpus:{transitions:1000,breaks},investigation:investigateCache(),rows,samples};
  } finally {rmSync(work,{recursive:true,force:true});}
 }

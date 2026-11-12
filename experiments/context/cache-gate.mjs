@@ -9,7 +9,10 @@ import {compareReports} from './cache-compare.mjs';
 import {BASE_SYSTEM} from './capture-context.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
-const ref='fe0e38f8cd03bfacc9baca730e9a902d3cff116e';
+// Fork baseline: the first commit whose explicit-marker sessions send a
+// request-only tail. Upstream 0.34.0 predates the fork's intentional payload
+// changes (task snapshot tail, request-only tail), so it can no longer match.
+const ref='6fae508d2078c1cb266872a56780aae7ffadfed6';
 const output=process.env.PI_GOAL_CACHE_REPORT_DIR??mkdtempSync(path.join(tmpdir(),'goal-cache-evidence-'));
 mkdirSync(output,{recursive:true});
 const baselineRoot=mkdtempSync(path.join(tmpdir(),'goal-cache-baseline-'));

@@ -108,7 +108,10 @@ function createCapture(cwd) {
 		return full.slice(1);
 	}
 
-	return { tools, startSession, runTurn, runContext, ctx,
+	/** The registered provider hook: relocates the explicit cache marker in place. */
+	const runProviderRequest = (payload) => handlers.get("before_provider_request")?.({ payload }, ctx);
+
+	return { tools, startSession, runTurn, runContext, runProviderRequest, ctx,
   get activeTools() { return activeTools.map(name => tools.find(t => t.name === name)).filter(Boolean); },
   compact: () => handlers.get("session_compact")({}, ctx),
  };
